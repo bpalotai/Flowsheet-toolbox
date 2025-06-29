@@ -1,0 +1,1253 @@
+{% extends "base.html" %}
+
+{% block title %}Batch Calibration | Simulation Platform{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<style>
+    .parameter-card {
+        transition: all 0.3s;
+    }
+    .parameter-card:hover {
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    }
+    .selected-parameter {
+        border-color: #0d6efd;
+        border-width: 2px;
+    }
+    .form-range::-webkit-slider-thumb {
+        background: #0d6efd;
+    }
+    .form-range::-moz-range-thumb {
+        background: #0d6efd;
+    }
+    .form-range::-ms-thumb {
+        background: #0d6efd;
+    }
+    .excel-preview {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="bi bi-collection text-primary me-2"></i>Batch Calibration</h1>
+        <a href="{{ url_for('calibration.index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Back to Calibration
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">Batch Calibration Setup</h5>
+                </div>
+                <div class="card-body">
+                    <form id="batchCalibrationForm">
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="calibrationName" class="form-label">Batch Calibration Name</label>
+                                    <input type="text" class="form-control" id="calibrationName" name="name" placeholder="Enter a name for this batch calibration">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="caseSelect" class="form-label">Select Case</label>
+                                    <select class="form-select" id="caseSelect" name="case_id" required>
+                                        <option value="" selected disabled>Select a case</option>
+                                        {% for case in cases %}
+                                        <option value="{{ case.id }}">{{ case.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="useSurrogate" name="use_surrogate">
+                                        <label class="form-check-label" for="useSurrogate">Use Surrogate Model</label>
+                                    </div>
+                                </div>
+                                
+                                <div id="surrogateSelectDiv" class="mb-3 d-none">
+                                    <label for="surrogateSelect" class="form-label">Select Surrogate Model</label>
+                                    <select class="form-select" id="surrogateSelect" name="surrogate_id">
+                                        <option value="" selected disabled>Select a surrogate model</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" id="isInverse" name="is_inverse" disabled>
+                                    <label class="form-check-label" for="isInverse">
+                                        Inverse Model
+                                        <i class="bi bi-info-circle text-muted" data-bs-toggle="tooltip" 
+                                           title="Inverse models directly predict input parameters from output values"></i>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <!-- Excel File Upload -->
+                                <div class="mb-3">
+                                    <label for="excelFile" class="form-label">Batch Data Excel File</label>
+                                    <input type="file" class="form-control" id="excelFile" name="excel_file" accept=".xlsx,.xls" required>
+                                    <div class="form-text">Upload Excel file with input/output data for batch calibration</div>
+                                </div>
+                                
+                                <div id="optimizerDiv" class="mb-3">
+                                    <label for="optimizerSelect" class="form-label">Optimization Method</label>
+                                    <select class="form-select" id="optimizerSelect" name="optimizer">
+                                        <option value="pso" selected>Particle Swarm Optimization (PSO)</option>
+                                    </select>
+                                </div>
+                                
+                                <div id="psoParamsDiv">
+                                    <h6 class="mt-3">PSO Parameters</h6>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="particles" class="form-label">Number of Particles</label>
+                                                <input type="number" class="form-control" id="particles" name="particles" value="50" min="10" max="200">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="iterations" class="form-label">Max Iterations</label>
+                                                <input type="number" class="form-control" id="iterations" name="iterations" value="100" min="10" max="500">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label for="c1" class="form-label">Cognitive Parameter (c1)</label>
+                                                <input type="number" class="form-control" id="c1" name="c1" value="0.1" min="0" max="2" step="0.1">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label for="c2" class="form-label">Social Parameter (c2)</label>
+                                                <input type="number" class="form-control" id="c2" name="c2" value="0.4" min="0" max="2" step="0.1">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label for="w" class="form-label">Inertia Weight (w)</label>
+                                                <input type="number" class="form-control" id="w" name="w" value="0.7" min="0" max="1" step="0.1">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="stopping_threshold" class="form-label" data-bs-toggle="tooltip" 
+                                                       title="Convergence threshold: stop when the difference between iterations is less than this value">
+                                                    Convergence Threshold
+                                                </label>
+                                                <input type="number" class="form-control" id="stopping_threshold" name="stopping_threshold" 
+                                                       value="0.00001" min="0.000001" max="0.1" step="0.00001">
+                                                <small class="form-text text-muted">Difference between iterations</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="stopping_MSE" class="form-label" data-bs-toggle="tooltip" 
+                                                       title="Cost threshold: stop when the cost function value is less than this value">
+                                                    Cost Threshold
+                                                </label>
+                                                <input type="number" class="form-control" id="stopping_MSE" name="stopping_MSE" 
+                                                       value="0.0000001" min="0.0000001" max="0.1" step="0.0000001">
+                                                <small class="form-text text-muted">Target cost function value</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>                                
+                            </div>
+                        </div>
+                        
+                        <!-- Excel Preview Section -->
+                        <div id="excelPreviewSection" class="d-none mb-4">
+                            <hr>
+                            <h5>Excel File Preview</h5>
+                            <div class="card">
+                                <div class="card-body excel-preview">
+                                    <div id="excelPreviewContainer"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr>
+                        
+                        <!-- Parameter Selection Section -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <h5>Input Parameters (Calibration Ranges)</h5>
+                                <p class="text-muted">Set calibration ranges for input parameters</p>
+                                <div id="inputParametersContainer" class="row g-3">
+                                    <div class="text-center py-5">
+                                        <i class="bi bi-arrow-down-up display-4 text-muted"></i>
+                                        <p class="mt-3">Select a case and upload Excel file to view available parameters</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <h5>Output Parameters (Weights & SDEV)</h5>
+                                <p class="text-muted">Set weights and standard deviations for output parameters</p>
+                                <div id="outputParametersContainer" class="row g-3">
+                                    <div class="text-center py-5">
+                                        <i class="bi bi-arrow-down-up display-4 text-muted"></i>
+                                        <p class="mt-3">Select a case and upload Excel file to view available parameters</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <button type="button" class="btn btn-outline-secondary" onclick="window.location.href='{{ url_for('calibration.index') }}'">
+                                Cancel
+                            </button>
+                            <button type="button" id="runBatchCalibrationBtn" class="btn btn-primary" disabled>
+                                <i class="bi bi-play-fill me-2"></i>Run Batch Calibration
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Results Section (Initially Hidden) -->
+    <div id="resultsSection" class="d-none">
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="card-title mb-0">Batch Calibration Results</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <h6>Progress</h6>
+                        <div class="progress mb-3">
+                            <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                        </div>
+                        <div id="progressText" class="text-muted">Ready to start...</div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-12">
+                        <h6>Results Summary</h6>
+                        <div id="resultsTableContainer" class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Row</th>
+                                        <th>Status</th>
+                                        <th>Mean Rel Error (%)</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="resultsTableBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-flex justify-content-end mt-4">
+                    <button type="button" id="saveBatchResultsBtn" class="btn btn-success" disabled>
+                        <i class="bi bi-save me-2"></i>Save Batch Results
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="position-fixed top-0 start-0 w-100 h-100 d-none" 
+         style="background-color: rgba(0,0,0,0.5); z-index: 9999;">
+        <div class="position-absolute top-50 start-50 translate-middle text-center text-white">
+            <div class="spinner-border text-light mb-3" style="width: 3rem; height: 3rem;" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <h5 id="loadingMessage">Processing batch calibration...</h5>
+            <p id="loadingDetails" class="text-light-emphasis">This may take several minutes</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // DOM elements
+    const caseSelect = document.getElementById('caseSelect');
+    const useSurrogate = document.getElementById('useSurrogate');
+    const surrogateSelectDiv = document.getElementById('surrogateSelectDiv');
+    const surrogateSelect = document.getElementById('surrogateSelect');
+    const isInverse = document.getElementById('isInverse');
+    const optimizerDiv = document.getElementById('optimizerDiv');
+    const psoParamsDiv = document.getElementById('psoParamsDiv');
+    const excelFile = document.getElementById('excelFile');
+    const excelPreviewSection = document.getElementById('excelPreviewSection');
+    const excelPreviewContainer = document.getElementById('excelPreviewContainer');
+    const inputParametersContainer = document.getElementById('inputParametersContainer');
+    const outputParametersContainer = document.getElementById('outputParametersContainer');
+    const runBatchCalibrationBtn = document.getElementById('runBatchCalibrationBtn');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const loadingMessage = document.getElementById('loadingMessage');
+    const loadingDetails = document.getElementById('loadingDetails');
+    const resultsSection = document.getElementById('resultsSection');
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    const resultsTableBody = document.getElementById('resultsTableBody');
+    const saveBatchResultsBtn = document.getElementById('saveBatchResultsBtn');
+    
+    // State variables
+    let caseParameters = null;
+    let surrogateModels = [];
+    let excelData = null;
+    let batchResults = null;
+    let parameterRanges = null;
+    
+    // Event listeners
+    caseSelect.addEventListener('change', handleCaseChange);
+    useSurrogate.addEventListener('change', handleSurrogateToggle);
+    surrogateSelect.addEventListener('change', handleSurrogateChange);
+    excelFile.addEventListener('change', handleExcelUpload);
+    runBatchCalibrationBtn.addEventListener('click', runBatchCalibration);
+    saveBatchResultsBtn.addEventListener('click', saveBatchResults);
+    
+    // Functions
+    function handleCaseChange() {
+        const caseId = caseSelect.value;
+        if (!caseId) return;
+        
+        // Clear previous parameters
+        inputParametersContainer.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-3">Loading parameters...</p></div>';
+        outputParametersContainer.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-3">Loading parameters...</p></div>';
+        
+        // Fetch case parameters
+        fetch(`/calibration/api/case_info/${caseId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                caseParameters = data;
+                
+                // Fetch parameter ranges for PSO optimization
+                return fetch(`/calibration/api/parameter_ranges/${caseId}`);
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(rangeData => {
+                // Store parameter ranges
+                parameterRanges = rangeData.parameter_ranges;
+                
+                // Fetch surrogate models for this case
+                return fetch(`/calibration/api/surrogate_models/${caseId}`);
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                surrogateModels = data.models;
+                
+                // Populate surrogate select
+                surrogateSelect.innerHTML = '<option value="" selected disabled>Select a surrogate model</option>';
+                surrogateModels.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.name;
+                    surrogateSelect.appendChild(option);
+                });
+                
+                // Update parameter display if Excel data is available
+                if (excelData) {
+                    updateParameterDisplay();
+                } else {
+                    inputParametersContainer.innerHTML = '<div class="text-center py-5"><i class="bi bi-file-earmark-excel display-4 text-muted"></i><p class="mt-3">Upload Excel file to view parameters</p></div>';
+                    outputParametersContainer.innerHTML = '<div class="text-center py-5"><i class="bi bi-file-earmark-excel display-4 text-muted"></i><p class="mt-3">Upload Excel file to view parameters</p></div>';
+                }
+                
+                // Check run button state
+                checkRunButtonState();
+            })
+            .catch(error => {
+                console.error('Error fetching case data:', error);
+                inputParametersContainer.innerHTML = '<div class="alert alert-danger">Error loading parameters: ' + error.message + '</div>';
+                outputParametersContainer.innerHTML = '<div class="alert alert-danger">Error loading parameters</div>';
+            });
+    }
+    
+    function handleSurrogateToggle() {
+        if (useSurrogate.checked) {
+            surrogateSelectDiv.classList.remove('d-none');
+            isInverse.disabled = false;
+            
+            if (surrogateSelect.value) {
+                const selectedModel = surrogateModels.find(model => model.id == surrogateSelect.value);
+                const isInverseModel = selectedModel && selectedModel.is_inverse;
+                
+                isInverse.checked = isInverseModel;
+                
+                if (isInverseModel) {
+                    optimizerDiv.classList.add('d-none');
+                    psoParamsDiv.classList.add('d-none');
+                } else {
+                    optimizerDiv.classList.remove('d-none');
+                    psoParamsDiv.classList.remove('d-none');
+                }
+            } else {
+                optimizerDiv.classList.remove('d-none');
+                psoParamsDiv.classList.remove('d-none');
+            }
+        } else {
+            surrogateSelectDiv.classList.add('d-none');
+            isInverse.disabled = true;
+            isInverse.checked = false;
+            optimizerDiv.classList.remove('d-none');
+            psoParamsDiv.classList.remove('d-none');
+        }
+        
+        checkRunButtonState();
+    }
+
+    function handleSurrogateChange() {
+        const surrogateId = surrogateSelect.value;
+        const caseId = caseSelect.value;
+        
+        if (!surrogateId || !caseId) return;
+        
+        const selectedModel = surrogateModels.find(model => model.id == surrogateId);
+        const isInverseModel = selectedModel && selectedModel.is_inverse;
+        
+        isInverse.checked = isInverseModel;
+        
+        if (isInverseModel) {
+            optimizerDiv.classList.add('d-none');
+            psoParamsDiv.classList.add('d-none');
+        } else {
+            optimizerDiv.classList.remove('d-none');
+            psoParamsDiv.classList.remove('d-none');
+        }
+        
+        // Update parameter ranges with surrogate training data
+        fetch(`/calibration/api/parameter_ranges/${caseId}?surrogate_id=${surrogateId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(rangeData => {
+                parameterRanges = rangeData.parameter_ranges;
+                
+                if (excelData) {
+                    updateParameterDisplay();
+                }
+                
+                checkRunButtonState();
+            })
+            .catch(error => {
+                console.error('Error fetching parameter ranges:', error);
+            });
+    }
+    
+    function handleExcelUpload() {
+        const file = excelFile.files[0];
+        if (!file) return;
+        
+        const formData = new FormData();
+        formData.append('excel_file', file);
+        
+        // Show loading
+        excelPreviewContainer.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary" role="status"></div><p class="mt-3">Processing Excel file...</p></div>';
+        excelPreviewSection.classList.remove('d-none');
+        
+        fetch('/calibration/api/upload_batch_excel', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to process Excel file');
+            }
+            return response.json();
+        })
+        .then(data => {
+            excelData = data;
+            displayExcelPreview(data);
+            
+            if (caseParameters) {
+                updateParameterDisplay();
+            }
+            
+            checkRunButtonState();
+        })
+        .catch(error => {
+            console.error('Error processing Excel file:', error);
+            excelPreviewContainer.innerHTML = '<div class="alert alert-danger">Error processing Excel file: ' + error.message + '</div>';
+        });
+    }
+    
+    function displayExcelPreview(data) {
+        const { columns, preview_data, total_rows } = data;
+        
+        let html = `
+            <div class="mb-3">
+                <strong>File Info:</strong> ${total_rows} rows, ${columns.length} columns
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                    <thead>
+                        <tr>
+        `;
+        
+        columns.forEach(col => {
+            html += `<th>${col}</th>`;
+        });
+        
+        html += `
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        preview_data.forEach(row => {
+            html += '<tr>';
+            columns.forEach(col => {
+                html += `<td>${row[col] !== undefined ? row[col] : ''}</td>`;
+            });
+            html += '</tr>';
+        });
+        
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        if (total_rows > preview_data.length) {
+            html += `<div class="text-muted">Showing first ${preview_data.length} rows of ${total_rows} total rows</div>`;
+        }
+        
+        excelPreviewContainer.innerHTML = html;
+    }
+    
+    function updateParameterDisplay() {
+        if (!caseParameters || !excelData) return;
+        
+        const surrogateId = surrogateSelect.value;
+        const selectedModel = surrogateId ? surrogateModels.find(model => model.id == surrogateId) : null;
+        const isInverseModel = selectedModel && selectedModel.is_inverse;
+        
+        // Get available columns from Excel
+        const excelColumns = excelData.columns;
+        
+        // Filter parameters based on what's available in Excel and surrogate model
+        let inputParamsToUse = {};
+        let outputParamsToUse = {};
+        
+        if (isInverseModel) {
+            // For inverse models, filter based on surrogate inputs/outputs
+            Object.entries(caseParameters.output_params).forEach(([paramName, paramConfig]) => {
+                if (selectedModel.active_inputs.includes(paramName) && excelColumns.includes(paramName)) {
+                    inputParamsToUse[paramName] = paramConfig;
+                }
+            });
+            
+            Object.entries(caseParameters.input_params).forEach(([paramName, paramConfig]) => {
+                if (selectedModel.active_outputs.includes(paramName)) {
+                    outputParamsToUse[paramName] = paramConfig;
+                }
+            });
+        } else {
+            // For regular models
+            Object.entries(caseParameters.input_params).forEach(([paramName, paramConfig]) => {
+                if (excelColumns.includes(paramName)) {
+                    if (!selectedModel || selectedModel.active_inputs.includes(paramName)) {
+                        inputParamsToUse[paramName] = paramConfig;
+                    }
+                }
+            });
+            
+            Object.entries(caseParameters.output_params).forEach(([paramName, paramConfig]) => {
+                if (excelColumns.includes(paramName)) {
+                    if (!selectedModel || selectedModel.active_outputs.includes(paramName)) {
+                        outputParamsToUse[paramName] = paramConfig;
+                    }
+                }
+            });
+        }
+        
+        renderInputParameters(inputParamsToUse, isInverseModel);
+        renderOutputParameters(outputParamsToUse, isInverseModel);
+    }
+    
+    function renderInputParameters(inputParams, isInverse = false) {
+        inputParametersContainer.innerHTML = '';
+        
+        if (Object.keys(inputParams).length === 0) {
+            inputParametersContainer.innerHTML = '<div class="alert alert-info">No matching input parameters found in Excel file</div>';
+            return;
+        }
+        
+        const card = document.createElement('div');
+        card.className = 'card';
+        
+        const cardHeader = document.createElement('div');
+        cardHeader.className = 'card-header bg-light';
+        cardHeader.innerHTML = isInverse ? 
+            '<h6 class="mb-0">Target Values (From Excel)</h6>' : 
+            '<h6 class="mb-0">Calibration Ranges</h6>';
+        
+        const cardBody = document.createElement('div');
+        cardBody.className = 'card-body';
+        
+        if (isInverse) {
+            cardBody.innerHTML = `
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Inverse Model:</strong> Target values will be read from the Excel file.
+                    These parameters are automatically selected based on available Excel columns.
+                </div>
+            `;
+            
+            const tableResponsive = document.createElement('div');
+            tableResponsive.className = 'table-responsive';
+            
+            const table = document.createElement('table');
+            table.className = 'table table-sm table-hover';
+            
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Available in Excel</th>
+                    </tr>
+                </thead>
+                <tbody>
+            `;
+            
+            Object.keys(inputParams).forEach(paramName => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><strong>${paramName}</strong></td>
+                    <td><span class="badge bg-success">Yes</span></td>
+                `;
+                table.querySelector('tbody').appendChild(row);
+            });
+            
+            table.innerHTML += '</tbody>';
+            tableResponsive.appendChild(table);
+            cardBody.appendChild(tableResponsive);
+        } else {
+            cardBody.innerHTML = `
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Calibration Ranges:</strong> Set min-max ranges for parameters to calibrate.
+                    Fixed values will be read from the Excel file.
+                </div>
+            `;
+            
+            const tableResponsive = document.createElement('div');
+            tableResponsive.className = 'table-responsive';
+            
+            const table = document.createElement('table');
+            table.className = 'table table-sm table-hover';
+            
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th style="width: 25%">Parameter</th>
+                        <th style="width: 15%">State</th>
+                        <th style="width: 30%">Min</th>
+                        <th style="width: 30%">Max</th>
+                                        </tr>
+                </thead>
+                <tbody>
+            `;
+            
+            Object.entries(inputParams).forEach(([paramName, paramInfo]) => {
+                const rangeInfo = parameterRanges && parameterRanges[paramName] ? parameterRanges[paramName] : {};
+                
+                let minValue = rangeInfo.min !== undefined ? rangeInfo.min : paramInfo.min || 0;
+                let maxValue = rangeInfo.max !== undefined ? rangeInfo.max : paramInfo.max || 1;
+                
+                if (rangeInfo.source === 'surrogate_training_data') {
+                    minValue = rangeInfo.training_min;
+                    maxValue = rangeInfo.training_max;
+                }
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><label for="state_${paramName}">${paramName}</label></td>
+                    <td>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <input type="radio" class="btn-check param-state" name="state_${paramName}" id="fixed_${paramName}" 
+                                value="fixed" checked>
+                            <label class="btn btn-outline-secondary" for="fixed_${paramName}">Fixed</label>
+                            
+                            <input type="radio" class="btn-check param-state" name="state_${paramName}" id="calibrate_${paramName}" 
+                                value="calibrate">
+                            <label class="btn btn-outline-primary" for="calibrate_${paramName}">Calibrate</label>
+                        </div>
+                    </td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm param-min" 
+                            id="${paramName}_min" name="${paramName}_min" 
+                            value="${minValue}" 
+                            step="any" disabled data-param="${paramName}">
+                    </td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm param-max" 
+                            id="${paramName}_max" name="${paramName}_max" 
+                            value="${maxValue}" 
+                            step="any" disabled data-param="${paramName}">
+                    </td>
+                `;
+                table.querySelector('tbody').appendChild(row);
+            });
+            
+            table.innerHTML += '</tbody>';
+            tableResponsive.appendChild(table);
+            cardBody.appendChild(tableResponsive);
+            
+            // Add event listeners for parameter state radio buttons
+            document.querySelectorAll('.param-state').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    const paramName = this.id.split('_')[1];
+                    const isCalibrate = this.value === 'calibrate';
+                    
+                    const minInput = document.getElementById(`${paramName}_min`);
+                    const maxInput = document.getElementById(`${paramName}_max`);
+                    
+                    if (minInput) minInput.disabled = !isCalibrate;
+                    if (maxInput) maxInput.disabled = !isCalibrate;
+                    
+                    checkRunButtonState();
+                });
+            });
+        }
+        
+        card.appendChild(cardHeader);
+        card.appendChild(cardBody);
+        inputParametersContainer.appendChild(card);
+    }
+    
+    function renderOutputParameters(outputParams, isInverse = false) {
+        outputParametersContainer.innerHTML = '';
+        
+        if (Object.keys(outputParams).length === 0) {
+            outputParametersContainer.innerHTML = '<div class="alert alert-info">No matching output parameters found in Excel file</div>';
+            return;
+        }
+        
+        const card = document.createElement('div');
+        card.className = 'card';
+        
+        const cardHeader = document.createElement('div');
+        cardHeader.className = 'card-header bg-light';
+        cardHeader.innerHTML = isInverse ? 
+            '<h6 class="mb-0">Predicted Parameters</h6>' : 
+            '<h6 class="mb-0">Target Parameters (Weights & SDEV)</h6>';
+        
+        const cardBody = document.createElement('div');
+        cardBody.className = 'card-body';
+        
+        if (isInverse) {
+            cardBody.innerHTML = `
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Inverse Model:</strong> These parameters will be predicted by the inverse model.
+                </div>
+            `;
+            
+            const tableResponsive = document.createElement('div');
+            tableResponsive.className = 'table-responsive';
+            
+            const table = document.createElement('table');
+            table.className = 'table table-sm table-hover';
+            
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+            `;
+            
+            Object.keys(outputParams).forEach(paramName => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><strong>${paramName}</strong></td>
+                    <td>Will be calculated by the inverse model</td>
+                `;
+                table.querySelector('tbody').appendChild(row);
+            });
+            
+            table.innerHTML += '</tbody>';
+            tableResponsive.appendChild(table);
+            cardBody.appendChild(tableResponsive);
+        } else {
+            cardBody.innerHTML = `
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Target Parameters:</strong> Target values will be read from Excel file.
+                    Set weights and standard deviations for calibration.
+                </div>
+            `;
+            
+            const tableResponsive = document.createElement('div');
+            tableResponsive.className = 'table-responsive';
+            
+            const table = document.createElement('table');
+            table.className = 'table table-sm table-hover';
+            
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th style="width: 25%">Parameter</th>
+                        <th style="width: 25%">Available in Excel</th>
+                        <th style="width: 25%">Weight</th>
+                        <th style="width: 25%">SDEV</th>
+                    </tr>
+                </thead>
+                <tbody>
+            `;
+            
+            Object.entries(outputParams).forEach(([paramName, paramInfo]) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>
+                        <div class="form-check">
+                            <input class="form-check-input output-param-checkbox" type="checkbox" 
+                                id="check_out_${paramName}" data-param="${paramName}" checked>
+                            <label class="form-check-label" for="check_out_${paramName}">${paramName}</label>
+                        </div>
+                    </td>
+                    <td><span class="badge bg-success">Yes</span></td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm param-weight" 
+                            id="${paramName}_weight" name="${paramName}_weight" 
+                            value="${paramInfo.weight || 1.0}" min="0" max="1" step="0.01" 
+                            data-param="${paramName}">
+                    </td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm param-sdev" 
+                            id="${paramName}_sdev" name="${paramName}_sdev" 
+                            value="${paramInfo.sdev || 0.1}" min="0.0001" step="0.01" 
+                            data-param="${paramName}">
+                    </td>
+                `;
+                table.querySelector('tbody').appendChild(row);
+            });
+            
+            table.innerHTML += '</tbody>';
+            tableResponsive.appendChild(table);
+            cardBody.appendChild(tableResponsive);
+            
+            // Add event listeners for output parameter checkboxes
+            document.querySelectorAll('.output-param-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    const paramName = this.dataset.param;
+                    const weightInput = document.getElementById(`${paramName}_weight`);
+                    const sdevInput = document.getElementById(`${paramName}_sdev`);
+                    
+                    if (weightInput) weightInput.disabled = !this.checked;
+                    if (sdevInput) sdevInput.disabled = !this.checked;
+                    
+                    checkRunButtonState();
+                });
+            });
+        }
+        
+        card.appendChild(cardHeader);
+        card.appendChild(cardBody);
+        outputParametersContainer.appendChild(card);
+    }
+    
+    function checkRunButtonState() {
+        console.log('Checking run button state...');
+        
+        const surrogateId = document.getElementById('surrogateSelect').value;
+        const selectedModel = surrogateId && surrogateModels ? 
+            surrogateModels.find(model => model.id == surrogateId) : null;
+        const isInverseModel = selectedModel && selectedModel.is_inverse;
+        
+        console.log('Case selected:', caseSelect.value);
+        console.log('Excel data loaded:', !!excelData);
+        console.log('Using surrogate:', useSurrogate.checked);
+        console.log('Is inverse model:', isInverseModel);
+        
+        let canRun = false;
+        
+        if (caseSelect.value && excelData) {
+            if (useSurrogate.checked && isInverseModel) {
+                // For inverse models, just need case and Excel data
+                canRun = true;
+                console.log('Inverse model: can run =', canRun);
+            } else {
+                // For regular models, need at least one calibration parameter and one output parameter
+                // Check for parameters set to "calibrate" state
+                const calibrateRadios = document.querySelectorAll('input[value="calibrate"]:checked');
+                const selectedInputs = calibrateRadios.length;
+                
+                // Check for selected output parameters
+                const selectedOutputs = document.querySelectorAll('.output-param-checkbox:checked').length;
+                
+                console.log('Selected inputs (calibrate):', selectedInputs);
+                console.log('Selected outputs:', selectedOutputs);
+                
+                canRun = selectedInputs > 0 && selectedOutputs > 0;
+            }
+        }
+        
+        console.log('Final canRun:', canRun);
+        runBatchCalibrationBtn.disabled = !canRun;
+        
+        // Update button text/appearance to show state
+        if (canRun) {
+            runBatchCalibrationBtn.classList.remove('btn-secondary');
+            runBatchCalibrationBtn.classList.add('btn-primary');
+        } else {
+            runBatchCalibrationBtn.classList.remove('btn-primary');
+            runBatchCalibrationBtn.classList.add('btn-secondary');
+        }
+    }
+
+    
+    function collectFormData() {
+        const surrogateId = document.getElementById('surrogateSelect').value;
+        const selectedModel = surrogateId && surrogateModels ? 
+            surrogateModels.find(model => model.id == surrogateId) : null;
+        const isInverseModel = selectedModel && selectedModel.is_inverse;
+        
+        const formData = {
+            name: document.getElementById('calibrationName').value || `Batch Calibration ${new Date().toLocaleString()}`,
+            case_id: parseInt(caseSelect.value),
+            use_surrogate: useSurrogate.checked,
+            surrogate_id: useSurrogate.checked ? parseInt(surrogateSelect.value) : null,
+            is_inverse: isInverseModel,
+            optimizer: document.getElementById('optimizerSelect').value,
+            pso_params: {
+                particles: parseInt(document.getElementById('particles').value),
+                iterations: parseInt(document.getElementById('iterations').value),
+                c1: parseFloat(document.getElementById('c1').value),
+                c2: parseFloat(document.getElementById('c2').value),
+                w: parseFloat(document.getElementById('w').value),
+                stopping_threshold: parseFloat(document.getElementById('stopping_threshold').value),
+                stopping_MSE: parseFloat(document.getElementById('stopping_MSE').value),
+                debug: false
+            },
+            excel_data: excelData,
+            calibrate_params: {},
+            fixed_params: {},
+            output_params: {},
+            weights: {},
+            sdevs: {}
+        };
+        
+        if (!isInverseModel) {
+            // Collect calibration parameters
+            document.querySelectorAll('input[id^="calibrate_"]:checked').forEach(radio => {
+                const paramName = radio.id.split('_')[1];
+                const minInput = document.getElementById(`${paramName}_min`);
+                const maxInput = document.getElementById(`${paramName}_max`);
+                
+                if (minInput && maxInput) {
+                    formData.calibrate_params[paramName] = {
+                        min: parseFloat(minInput.value),
+                        max: parseFloat(maxInput.value)
+                    };
+                }
+            });
+            
+            // Collect output parameters
+            document.querySelectorAll('.output-param-checkbox:checked').forEach(checkbox => {
+                const paramName = checkbox.dataset.param;
+                const weightInput = document.getElementById(`${paramName}_weight`);
+                const sdevInput = document.getElementById(`${paramName}_sdev`);
+                
+                if (weightInput) formData.weights[paramName] = parseFloat(weightInput.value);
+                if (sdevInput) formData.sdevs[paramName] = parseFloat(sdevInput.value);
+                
+                formData.output_params[paramName] = {
+                    weight: formData.weights[paramName],
+                    sdev: formData.sdevs[paramName]
+                };
+            });
+        }
+        
+        return formData;
+    }
+    
+    function runBatchCalibration() {
+        const formData = collectFormData();
+        
+        // Show loading overlay and results section
+        loadingOverlay.classList.remove('d-none');
+        resultsSection.classList.remove('d-none');
+        
+        loadingMessage.textContent = 'Starting batch calibration...';
+        loadingDetails.textContent = 'Processing multiple working points';
+        
+        // Reset progress
+        progressBar.style.width = '0%';
+        progressText.textContent = 'Initializing...';
+        resultsTableBody.innerHTML = '';
+        
+        // Send request to run batch calibration
+        fetch('/calibration/api/run_batch_calibration', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || 'Error running batch calibration');
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Hide loading overlay
+            loadingOverlay.classList.add('d-none');
+            
+            // Store results
+            batchResults = data;
+            
+            // Display results
+            displayBatchResults(data);
+            
+            // Enable save button
+            saveBatchResultsBtn.disabled = false;
+            
+            // Scroll to results
+            resultsSection.scrollIntoView({ behavior: 'smooth' });
+        })
+        .catch(error => {
+            console.error('Error running batch calibration:', error);
+            loadingOverlay.classList.add('d-none');
+            alert(`Error: ${error.message}`);
+        });
+    }
+    
+    function displayBatchResults(results) {
+        const { batch_results, overall_summary } = results;
+        
+        // Update progress bar to 100%
+        progressBar.style.width = '100%';
+        progressText.textContent = `Completed ${batch_results.length} calibrations`;
+        
+        // Clear and populate results table
+        resultsTableBody.innerHTML = '';
+        
+        batch_results.forEach((result, index) => {
+            const row = document.createElement('tr');
+            
+            const statusBadge = result.success ? 
+                '<span class="badge bg-success">Success</span>' : 
+                '<span class="badge bg-danger">Failed</span>';
+            
+            const errorValue = result.success && result.overall_metrics ? 
+                `${result.overall_metrics.sim_mean_rel_error.toFixed(2)}%` : 
+                'N/A';
+            
+            row.innerHTML = `
+                <td>Row ${index + 1}</td>
+                <td>${statusBadge}</td>
+                                <td>${errorValue}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-info" onclick="viewRowDetails(${index})" 
+                        ${!result.success ? 'disabled' : ''}>
+                        <i class="bi bi-eye"></i> View
+                    </button>
+                </td>
+            `;
+            
+            resultsTableBody.appendChild(row);
+        });
+        
+        // Add overall summary
+        if (overall_summary) {
+            const summaryRow = document.createElement('tr');
+            summaryRow.className = 'table-info';
+            summaryRow.innerHTML = `
+                <td><strong>Overall</strong></td>
+                <td><span class="badge bg-info">${overall_summary.successful_runs}/${overall_summary.total_runs}</span></td>
+                <td><strong>${overall_summary.average_error ? overall_summary.average_error.toFixed(2) + '%' : 'N/A'}</strong></td>
+                <td>-</td>
+            `;
+            resultsTableBody.appendChild(summaryRow);
+        }
+    }
+    
+    function viewRowDetails(rowIndex) {
+        if (!batchResults || !batchResults.batch_results[rowIndex]) return;
+        
+        const result = batchResults.batch_results[rowIndex];
+        
+        // Create modal to show detailed results
+        const modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.innerHTML = `
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Row ${rowIndex + 1} - Calibration Details</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Input Data</h6>
+                                <table class="table table-sm">
+                                    <tbody>
+                                        ${Object.entries(result.input_data || {}).map(([key, value]) => 
+                                            `<tr><td>${key}</td><td>${typeof value === 'number' ? value.toFixed(6) : value}</td></tr>`
+                                        ).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Calibrated Parameters</h6>
+                                <table class="table table-sm">
+                                    <tbody>
+                                        ${Object.entries(result.calibration_result || {}).map(([key, value]) => 
+                                            `<tr><td>${key}</td><td>${typeof value === 'number' ? value.toFixed(6) : value}</td></tr>`
+                                        ).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        ${result.metrics ? `
+                        <div class="row mt-3">
+                            <div class="col-md-12">
+                                <h6>Accuracy Metrics</h6>
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Parameter</th>
+                                            <th>Target</th>
+                                            <th>Simulation</th>
+                                            <th>Error (%)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${Object.entries(result.metrics).map(([param, metrics]) => `
+                                            <tr>
+                                                <td>${param}</td>
+                                                <td>${metrics.true_value.toFixed(6)}</td>
+                                                <td>${metrics.simulation_value.toFixed(6)}</td>
+                                                <td>${metrics.sim_relative_error !== Infinity ? metrics.sim_relative_error.toFixed(2) + '%' : 'N/A'}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+        
+        // Remove modal from DOM when hidden
+        modal.addEventListener('hidden.bs.modal', function() {
+            document.body.removeChild(modal);
+        });
+    }
+    
+    function saveBatchResults() {
+        if (!batchResults) {
+            alert('No results to save');
+            return;
+        }
+        
+        const formData = collectFormData();
+        
+        const saveData = {
+            name: formData.name,
+            case_id: formData.case_id,
+            simulation_type: `Batch Calibration (${formData.optimizer.toUpperCase()})`,
+            data: {
+                ...formData,
+                batch_results: batchResults.batch_results,
+                overall_summary: batchResults.overall_summary,
+                timestamp: new Date().toISOString()
+            }
+        };
+        
+        // Show loading overlay
+        loadingOverlay.classList.remove('d-none');
+        loadingMessage.textContent = 'Saving batch results...';
+        loadingDetails.textContent = 'Please wait';
+        
+        fetch('/calibration/api/save_batch_results', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(saveData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || 'Error saving results');
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            loadingOverlay.classList.add('d-none');
+            alert('Batch results saved successfully');
+            window.location.href = `/calibration/batch_details/${data.result_id}`;
+        })
+        .catch(error => {
+            console.error('Error saving batch results:', error);
+            loadingOverlay.classList.add('d-none');
+            alert(`Error: ${error.message}`);
+        });
+    }
+    
+    // Make viewRowDetails available globally
+    window.viewRowDetails = viewRowDetails;
+});
+</script>
+{% endblock %}
+
+

@@ -1,0 +1,719 @@
+{% extends "base.html" %}
+
+{% block title %}{{ model.name }} | Surrogate Model | Simulation Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-cpu text-primary me-2"></i>{{ model.name }}</h1>
+    <div class="btn-group">
+        <a href="{{ url_for('surrogate.api_download_model', model_id=model.id) }}" class="btn btn-info">
+            <i class="bi bi-download me-2"></i>Download Model
+        </a>
+        <a href="{{ url_for('surrogate.surrogate_index') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Back to Models
+        </a>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Model Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tbody>
+                        <tr>
+                            <th style="width: 30%">Name:</th>
+                            <td>{{ model.name }}</td>
+                        </tr>
+                        <tr>
+                            <th>Case:</th>
+                            <td>
+                                <a href="{{ url_for('cases.case_detail', case_id=case.id) }}">{{ case.name }}</a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Model Type:</th>
+                            <td>
+                                <span class="badge bg-info">
+                                    {% if model.model_type == 'random_forest' %}
+                                        Random Forest
+                                    {% elif model.model_type == 'neural_network' %}
+                                        Neural Network
+                                    {% elif model.model_type == 'gaussian_process' %}
+                                        Gaussian Process
+                                    {% elif model.model_type == 'polynomial' %}
+                                        Polynomial Regression
+                                    {% elif model.model_type == 'svr' %}
+                                        Support Vector Regression
+                                    {% else %}
+                                        {{ model.model_type }}
+                                    {% endif %}
+                                </span>
+                                {% if model.is_inverse_model %}
+                                    <span class="badge bg-warning ms-2">Inverse Model</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Created:</th>
+                            <td>{{ model.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        </tr>
+                        <tr>
+                            <th>Input Parameters:</th>
+                            <td>{{ model.input_params|length }}</td>
+                        </tr>
+                        <tr>
+                            <th>Output Parameters:</th>
+                            <td>{{ model.output_params|length }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Model Performance</h5>
+                <button class="btn btn-sm btn-outline-primary" id="showVisualizationsBtn" data-bs-toggle="modal" data-bs-target="#visualizationsModal">
+                    <i class="bi bi-graph-up me-2"></i>View Visualizations
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-title text-muted">R² Score</h6>
+                                <h3 class="mb-0">{% if model.metrics.r2_score is not none %}{{ "%.4f"|format(model.metrics.r2_score) }}{% else %}N/A{% endif %}</h3>
+                                {% set r2_score_safe = model.metrics.r2_score if model.metrics.r2_score is not none else 0 %}
+                                {% set r2_class = 'text-success' if r2_score_safe > 0.9 else 'text-warning' if r2_score_safe > 0.7 else 'text-danger' %}
+                                <small class="{{ r2_class }}">
+                                    {% if r2_score_safe > 0.9 %}
+                                        Excellent
+                                    {% elif r2_score_safe > 0.7 %}
+                                        Good
+                                    {% else %}
+                                        Needs Improvement
+                                    {% endif %}
+                                </small>
+                            </div>
+                        </div>
+                    </div>                    
+                    <div class="col-md-6 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-title text-muted">Mean Absolute Error</h6>
+                                <h3 class="mb-0">{% if model.metrics.mae is not none %}{{ "%.4f"|format(model.metrics.mae) }}{% else %}N/A{% endif %}</h3>
+                                <small class="text-muted">Lower is better</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-title text-muted">Root Mean Squared Error</h6>
+                                <h3 class="mb-0">{% if model.metrics.rmse is not none %}{{ "%.4f"|format(model.metrics.rmse) }}{% else %}N/A{% endif %}</h3>
+                                <small class="text-muted">Lower is better</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-title text-muted">Training Time</h6>
+                                <h3 class="mb-0">{% if model.metrics.training_time is not none %}{{ "%.2f"|format(model.metrics.training_time) }}s{% else %}N/A{% endif %}</h3>
+                                <small class="text-muted">Seconds</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Feature Importance Section (for applicable models) -->
+<div class="row mb-4" id="featureImportanceSection" style="display: none;">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Feature Importance</h5>
+            </div>
+            <div class="card-body">
+                <div id="featureImportanceChart" style="height: 300px;"></div>
+                <div class="text-center mt-3">
+                    <small class="text-muted">Higher values indicate more important features for prediction</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Make Predictions</h5>
+            </div>
+            <div class="card-body">
+                <form id="predictionForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="mb-3">Input Parameters</h6>
+                            <div id="inputParamsContainer">
+                                {% for param in model.input_params %}
+                                <div class="mb-3">
+                                    <label for="input_{{ param }}" class="form-label">{{ param }}</label>
+                                    <input type="number" class="form-control" id="input_{{ param }}" name="{{ param }}" step="any" required>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            
+                            <div class="d-grid gap-2 mt-4">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-lightning-charge me-2"></i>Make Prediction
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h6 class="mb-3">Prediction Results</h6>
+                            <div id="predictionResults" class="d-none">
+                                <div class="alert alert-success mb-3">
+                                    <i class="bi bi-check-circle me-2"></i>
+                                    <span id="predictionSuccessMessage">Prediction completed successfully!</span>
+                                </div>
+                                
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Output Parameter</th>
+                                                <th>Predicted Value</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="predictionResultsTable">
+                                            <!-- Prediction results will be added here -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                <div class="d-grid gap-2 mt-3">
+                                    <button type="button" class="btn btn-outline-secondary" id="clearPredictionBtn">
+                                        <i class="bi bi-x-circle me-2"></i>Clear Results
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div id="noPredictionResults">
+                                <div class="text-center py-5">
+                                    <i class="bi bi-lightning-charge display-4 text-muted"></i>
+                                    <p class="text-muted mt-3">Enter input values and click "Make Prediction" to see results</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Input Parameters</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Parameter Name</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for param in model.input_params %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ param }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Output Parameters</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Parameter Name</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for param in model.output_params %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ param }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Model Configuration Details -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Model Configuration</h5>
+                <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#modelConfigCollapse">
+                    <i class="bi bi-chevron-down"></i> Show Details
+                </button>
+            </div>
+            <div class="collapse" id="modelConfigCollapse">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <tbody>
+                                {% if model.model_config %}
+                                    {% for key, value in model.model_config.items() %}
+                                        {% if key != 'model_params' %}
+                                            <tr>
+                                                <th>{{ key|replace('_', ' ')|title }}</th>
+                                                <td>{{ value }}</td>
+                                            </tr>
+                                        {% endif %}
+                                    {% endfor %}
+                                    
+                                    {% if model.model_config.model_params %}
+                                        <tr>
+                                            <th colspan="2" class="table-light">Model Parameters</th>
+                                        </tr>
+                                        {% for param_key, param_value in model.model_config.model_params.items() %}
+                                            <tr>
+                                                <th>{{ param_key|replace('_', ' ')|title }}</th>
+                                                <td>{{ param_value }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    {% endif %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="2" class="text-center">No configuration details available</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Visualizations Modal -->
+<div class="modal fade" id="visualizationsModal" tabindex="-1" aria-labelledby="visualizationsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="visualizationsModalLabel">Model Visualizations</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-4" id="lossCurveSection">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">Training Loss Curve</h6>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="lossChart" height="150"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6 class="card-title mb-0">Actual vs. Predicted</h6>
+                                <div class="form-group mb-0">
+                                    <select class="form-select form-select-sm" id="parameterSelect">
+                                        {% for param in model.output_params %}
+                                        <option value="{{ param }}">{{ param }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="predictionChart" height="150"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+{% endblock %}
+
+{% block scripts %}
+<!-- Include Chart.js for visualizations -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const predictionForm = document.getElementById('predictionForm');
+    const predictionResults = document.getElementById('predictionResults');
+    const noPredictionResults = document.getElementById('noPredictionResults');
+    const predictionResultsTable = document.getElementById('predictionResultsTable');
+    const clearPredictionBtn = document.getElementById('clearPredictionBtn');
+    const parameterSelect = document.getElementById('parameterSelect');
+    const visualizationsModal = document.getElementById('visualizationsModal');
+    
+    // Visualization charts
+    let lossChart = null;
+    let predictionChart = null;
+    
+    // Load first sample data for input fields
+    loadFirstSampleData();
+    
+    // Load visualizations when modal is shown
+    visualizationsModal.addEventListener('shown.bs.modal', function() {
+        loadVisualizations();
+    });
+    
+    // Parameter selection change
+    parameterSelect.addEventListener('change', function() {
+        updatePredictionChart(this.value);
+    });
+    
+    // Handle form submission
+    predictionForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Collect input values
+        const inputData = {};
+        {% for param in model.input_params %}
+        inputData['{{ param }}'] = parseFloat(document.getElementById('input_{{ param }}').value);
+        {% endfor %}
+        console.log('inputData:', inputData);
+        // Make prediction request
+        console.log('Making prediction request for model ID:', {{ model.id }});
+        fetch('/surrogate/api/predict/{{ model.id }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ input_data: inputData })
+        })
+        .then(response => {
+            console.log('Response status:', response.status);
+            if (!response.ok) {
+                return response.text().then(text => {
+                    console.error('Error response:', text);
+                    throw new Error(`Prediction failed: ${response.status} ${text}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Prediction data:', data);
+            // Display prediction results
+            predictionResultsTable.innerHTML = '';
+            
+            // Add rows for each output parameter
+            Object.entries(data.predictions).forEach(([param, value]) => {
+                const row = document.createElement('tr');
+                
+                const paramCell = document.createElement('td');
+                paramCell.textContent = param;
+                
+                const valueCell = document.createElement('td');
+                valueCell.textContent = typeof value === 'number' ? value.toFixed(6) : value;
+                
+                row.appendChild(paramCell);
+                row.appendChild(valueCell);
+                
+                predictionResultsTable.appendChild(row);
+            });
+            
+            // Show results, hide placeholder
+            predictionResults.classList.remove('d-none');
+            noPredictionResults.style.display = 'none';
+            
+            // Update success message
+            document.getElementById('predictionSuccessMessage').textContent = 
+                `Prediction completed successfully at ${new Date().toLocaleTimeString()}`;
+        })
+        .catch(error => {
+            console.error('Error making prediction:', error);
+            alert(`Error making prediction: ${error.message}`);
+        });
+    });
+    
+    // Clear prediction results
+    if (clearPredictionBtn) {
+        clearPredictionBtn.addEventListener('click', function() {
+            predictionResults.classList.add('d-none');
+            noPredictionResults.style.display = 'block';
+            predictionResultsTable.innerHTML = '';
+        });
+    }
+    
+    // Function to load first sample data for input fields
+    function loadFirstSampleData() {
+        fetch(`/surrogate/api/training-data/{{ model.id }}?limit=1`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.samples && data.samples.length > 0) {
+                    const firstSample = data.samples[0];
+                    
+                    // Fill input fields with first sample data
+                    {% for param in model.input_params %}
+                    if ('{{ param }}' in firstSample) {
+                        document.getElementById('input_{{ param }}').value = firstSample['{{ param }}'];
+                    }
+                    {% endfor %}
+                }
+            })
+            .catch(error => {
+                console.error('Error loading sample data:', error);
+            });
+    }
+    
+    // Function to load visualizations
+    function loadVisualizations() {
+        // Load loss curve data
+        fetch(`/surrogate/api/loss-curve/{{ model.id }}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.loss_curve) {
+                    // Show the loss curve section and render the chart
+                    document.getElementById('lossCurveSection').style.display = 'block';
+                    renderLossChart(data.loss_curve);
+                } else {
+                    // Hide the loss curve section if no data
+                    document.getElementById('lossCurveSection').style.display = 'none';
+                }
+            })
+            .catch(error => {
+                console.error('Error loading loss curve:', error);
+                // Hide the loss curve section on error
+                document.getElementById('lossCurveSection').style.display = 'none';
+            });
+        
+        // Load prediction data for the first parameter
+        if (parameterSelect.value) {
+            updatePredictionChart(parameterSelect.value);
+        }
+    }
+
+    
+    // Function to render loss curve chart
+    function renderLossChart(lossCurve) {
+        const ctx = document.getElementById('lossChart').getContext('2d');
+        
+        // Destroy existing chart if it exists
+        if (lossChart) {
+            lossChart.destroy();
+        }
+        
+        // Create iterations array
+        const iterations = Array.from({length: lossCurve.length}, (_, i) => i + 1);
+        
+        lossChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: iterations,
+                datasets: [{
+                    label: 'Training Loss',
+                    data: lossCurve,
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderWidth: 2,
+                    tension: 0.1,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Training Loss Over Iterations'
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Iteration'
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Loss'
+                        },
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+    
+    // Function to update prediction chart for a specific parameter
+    function updatePredictionChart(parameter) {
+        fetch(`/surrogate/api/prediction-data/{{ model.id }}?parameter=${parameter}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.actual && data.predicted) {
+                    renderPredictionChart(parameter, data.actual, data.predicted, data.metrics);
+                }
+            })
+            .catch(error => {
+                console.error(`Error loading prediction data for ${parameter}:`, error);
+            });
+    }
+
+    
+    // Function to render prediction chart
+    function renderPredictionChart(parameter, actual, predicted, metrics) {
+        const ctx = document.getElementById('predictionChart').getContext('2d');
+        
+        // Destroy existing chart if it exists
+        if (predictionChart) {
+            predictionChart.destroy();
+        }
+        
+        // Create sample indices array
+        const sampleIndices = Array.from({length: actual.length}, (_, i) => i + 1);
+        
+        // Calculate perfect prediction line points
+        const minValue = Math.min(...actual, ...predicted);
+        const maxValue = Math.max(...actual, ...predicted);
+        const perfectLine = [minValue, maxValue];
+        const perfectLineLabels = [minValue, maxValue];
+        
+        // Format metrics for display
+        const r2Display = metrics ? metrics.r2.toFixed(4) : 'N/A';
+        const maeDisplay = metrics ? metrics.mae.toFixed(4) : 'N/A';
+        const metricsText = `R² = ${r2Display}, MAE = ${maeDisplay}`;
+        
+        predictionChart = new Chart(ctx, {
+            type: 'scatter',
+            data: {
+                datasets: [
+                    {
+                        label: 'Actual vs Predicted',
+                        data: actual.map((val, i) => ({
+                            x: val,
+                            y: predicted[i]
+                        })),
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1,
+                        pointRadius: 5,
+                        pointHoverRadius: 7
+                    },
+                    {
+                        label: 'Perfect Prediction',
+                        data: perfectLineLabels.map((val, i) => ({
+                            x: val,
+                            y: perfectLine[i]
+                        })),
+                        type: 'line',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        fill: false,
+                        pointRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: [`Actual vs Predicted: ${parameter}`, metricsText],
+                        font: {
+                            size: 14
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const dataIndex = context.dataIndex;
+                                return [
+                                    `Sample: ${dataIndex + 1}`,
+                                    `Actual: ${actual[dataIndex].toFixed(4)}`,
+                                    `Predicted: ${predicted[dataIndex].toFixed(4)}`
+                                ];
+                            }
+                        }
+                    },
+                    legend: {
+                        position: 'bottom'
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Actual Value'
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Predicted Value'
+                        }
+                    }
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

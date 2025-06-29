@@ -1,0 +1,1753 @@
+{% extends "base.html" %}
+
+{% block title %}Create Calibration | Simulation Platform{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<style>
+    .parameter-card {
+        transition: all 0.3s;
+    }
+    .parameter-card:hover {
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    }
+    .selected-parameter {
+        border-color: #0d6efd;
+        border-width: 2px;
+    }
+    .form-range::-webkit-slider-thumb {
+        background: #0d6efd;
+    }
+    .form-range::-moz-range-thumb {
+        background: #0d6efd;
+    }
+    .form-range::-ms-thumb {
+        background: #0d6efd;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="bi bi-sliders text-primary me-2"></i>Create Calibration</h1>
+        <a href="{{ url_for('calibration.index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Back to Calibration
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">Calibration Setup</h5>
+                </div>
+                <div class="card-body">
+                    <form id="calibrationForm">
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="calibrationName" class="form-label">Calibration Name</label>
+                                    <input type="text" class="form-control" id="calibrationName" name="name" placeholder="Enter a name for this calibration">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="caseSelect" class="form-label">Select Case</label>
+                                    <select class="form-select" id="caseSelect" name="case_id" required>
+                                        <option value="" selected disabled>Select a case</option>
+                                        {% for case in cases %}
+                                        <option value="{{ case.id }}">{{ case.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="useSurrogate" name="use_surrogate">
+                                        <label class="form-check-label" for="useSurrogate">Use Surrogate Model</label>
+                                    </div>
+                                </div>
+                                
+                                <div id="surrogateSelectDiv" class="mb-3 d-none">
+                                    <label for="surrogateSelect" class="form-label">Select Surrogate Model</label>
+                                    <select class="form-select" id="surrogateSelect" name="surrogate_id">
+                                        <option value="" selected disabled>Select a surrogate model</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" id="isInverse" name="is_inverse" disabled>
+                                    <label class="form-check-label" for="isInverse">
+                                        Inverse Model
+                                        <i class="bi bi-info-circle text-muted" data-bs-toggle="tooltip" 
+                                           title="Inverse models directly predict input parameters from output values"></i>
+                                    </label>
+                                </div>
+
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div id="optimizerDiv" class="mb-3">
+                                    <label for="optimizerSelect" class="form-label">Optimization Method</label>
+                                    <select class="form-select" id="optimizerSelect" name="optimizer">
+                                        <option value="pso" selected>Particle Swarm Optimization (PSO)</option>
+                                    </select>
+                                </div>
+                                
+                                <div id="psoParamsDiv">
+                                    <h6 class="mt-3">PSO Parameters</h6>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="particles" class="form-label">Number of Particles</label>
+                                                <input type="number" class="form-control" id="particles" name="particles" value="50" min="10" max="200">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="iterations" class="form-label">Max Iterations</label>
+                                                <input type="number" class="form-control" id="iterations" name="iterations" value="100" min="10" max="500">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label for="c1" class="form-label">Cognitive Parameter (c1)</label>
+                                                <input type="number" class="form-control" id="c1" name="c1" value="0.1" min="0" max="2" step="0.1">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label for="c2" class="form-label">Social Parameter (c2)</label>
+                                                <input type="number" class="form-control" id="c2" name="c2" value="0.4" min="0" max="2" step="0.1">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label for="w" class="form-label">Inertia Weight (w)</label>
+                                                <input type="number" class="form-control" id="w" name="w" value="0.7" min="0" max="1" step="0.1">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Add the new stopping threshold parameters -->
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="stopping_threshold" class="form-label" data-bs-toggle="tooltip" 
+                                                       title="Convergence threshold: stop when the difference between iterations is less than this value">
+                                                    Convergence Threshold
+                                                </label>
+                                                <input type="number" class="form-control" id="stopping_threshold" name="stopping_threshold" 
+                                                       value="0.00001" min="0.000001" max="0.1" step="0.00001">
+                                                <small class="form-text text-muted">Difference between iterations</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="stopping_MSE" class="form-label" data-bs-toggle="tooltip" 
+                                                       title="Cost threshold: stop when the cost function value is less than this value">
+                                                    Cost Threshold
+                                                </label>
+                                                <input type="number" class="form-control" id="stopping_MSE" name="stopping_MSE" 
+                                                       value="0.0000001" min="0.0000001" max="0.1" step="0.0000001">
+                                                <small class="form-text text-muted">Target cost function value</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>                                
+                            </div>
+                        </div>
+                        
+                        <hr>
+                        
+                        <!-- Parameter Selection Section -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <h5>Input Parameters</h5>
+                                <p class="text-muted">Select parameters to calibrate</p>
+                                <div id="inputParametersContainer" class="row g-3">
+                                    <div class="text-center py-5">
+                                        <i class="bi bi-arrow-down-up display-4 text-muted"></i>
+                                        <p class="mt-3">Select a case to view available parameters</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <h5>Output Parameters</h5>
+                                <p class="text-muted">Set target values for calibration</p>
+                                <div id="outputParametersContainer" class="row g-3">
+                                    <div class="text-center py-5">
+                                        <i class="bi bi-arrow-down-up display-4 text-muted"></i>
+                                        <p class="mt-3">Select a case to view available parameters</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <button type="button" class="btn btn-outline-secondary" onclick="window.location.href='{{ url_for('calibration.index') }}'">
+                                Cancel
+                            </button>
+                            <button type="button" id="runCalibrationBtn" class="btn btn-primary" disabled>
+                                <i class="bi bi-play-fill me-2"></i>Run Calibration
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Results Section (Initially Hidden) -->
+    <div id="resultsSection" class="d-none">
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="card-title mb-0">Calibration Results</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Calibrated Parameters</h6>
+                        <div id="calibratedParamsContainer" class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Parameter</th>
+                                        <th>Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="calibratedParamsBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6>Output Comparison</h6>
+                        <div id="outputComparisonContainer" class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Parameter</th>
+                                        <th>Target</th>
+                                        <th>Surrogate</th>
+                                        <th>Simulation</th>
+                                        <th>Error</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="outputComparisonBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-4">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0">Convergence Plot</h6>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="convergencePlot"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0">Overall Metrics</h6>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-sm">
+                                    <tbody id="metricsTableBody">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-flex justify-content-end mt-4">
+                    <button type="button" id="saveResultsBtn" class="btn btn-success">
+                        <i class="bi bi-save me-2"></i>Save Results
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="position-fixed top-0 start-0 w-100 h-100 d-none" 
+         style="background-color: rgba(0,0,0,0.5); z-index: 9999;">
+        <div class="position-absolute top-50 start-50 translate-middle text-center text-white">
+            <div class="spinner-border text-light mb-3" style="width: 3rem; height: 3rem;" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <h5 id="loadingMessage">Running calibration...</h5>
+            <p id="loadingDetails" class="text-light-emphasis">This may take a few minutes</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // DOM elements
+    const caseSelect = document.getElementById('caseSelect');
+    const useSurrogate = document.getElementById('useSurrogate');
+    const surrogateSelectDiv = document.getElementById('surrogateSelectDiv');
+    const surrogateSelect = document.getElementById('surrogateSelect');
+    const isInverse = document.getElementById('isInverse');
+    const optimizerDiv = document.getElementById('optimizerDiv');
+    const psoParamsDiv = document.getElementById('psoParamsDiv');
+    const inputParametersContainer = document.getElementById('inputParametersContainer');
+    const outputParametersContainer = document.getElementById('outputParametersContainer');
+    const runCalibrationBtn = document.getElementById('runCalibrationBtn');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const loadingMessage = document.getElementById('loadingMessage');
+    const loadingDetails = document.getElementById('loadingDetails');
+    const resultsSection = document.getElementById('resultsSection');
+    const saveResultsBtn = document.getElementById('saveResultsBtn');
+    
+    // State variables
+    let caseParameters = null;
+    let surrogateModels = [];
+    let selectedInputs = [];
+    let selectedOutputs = [];
+    let calibrationResults = null;
+    
+    // Event listeners
+    caseSelect.addEventListener('change', handleCaseChange);
+    useSurrogate.addEventListener('change', handleSurrogateToggle);
+    surrogateSelect.addEventListener('change', handleSurrogateChange);
+    runCalibrationBtn.addEventListener('click', runCalibration);
+    saveResultsBtn.addEventListener('click', saveResults);
+    
+    // Functions
+    function handleCaseChange() {
+        const caseId = caseSelect.value;
+        if (!caseId) return;
+        
+        // Clear previous parameters
+        inputParametersContainer.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-3">Loading parameters...</p></div>';
+        outputParametersContainer.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-3">Loading parameters...</p></div>';
+        
+        // Fetch case parameters
+        fetch(`/calibration/api/case_info/${caseId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                caseParameters = data;
+                
+                // Fetch parameter ranges for PSO optimization
+                return fetch(`/calibration/api/parameter_ranges/${caseId}`);
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(rangeData => {
+                // Store parameter ranges
+                parameterRanges = rangeData.parameter_ranges;
+                
+                // Render parameters with ranges
+                renderInputParameters(caseParameters.input_params, parameterRanges);
+                renderOutputParameters(caseParameters.output_params);
+                
+                // Fetch surrogate models for this case
+                return fetch(`/calibration/api/surrogate_models/${caseId}`);
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                surrogateModels = data.models;
+                
+                // Populate surrogate select
+                surrogateSelect.innerHTML = '<option value="" selected disabled>Select a surrogate model</option>';
+                surrogateModels.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.name;
+                    surrogateSelect.appendChild(option);
+                });
+                
+                // Enable run button if we have parameters
+                checkRunButtonState();
+            })
+            .catch(error => {
+                console.error('Error fetching case data:', error);
+                inputParametersContainer.innerHTML = '<div class="alert alert-danger">Error loading parameters: ' + error.message + '</div>';
+                outputParametersContainer.innerHTML = '<div class="alert alert-danger">Error loading parameters</div>';
+            });
+    }
+    
+    
+    function handleSurrogateToggle() {
+        if (useSurrogate.checked) {
+            // Show surrogate selection dropdown
+            surrogateSelectDiv.classList.remove('d-none');
+            
+            // Enable the isInverse checkbox
+            isInverse.disabled = false;
+            
+            // Check if a surrogate is already selected
+            if (surrogateSelect.value) {
+                // Get the selected surrogate model
+                const surrogateId = surrogateSelect.value;
+                const selectedModel = surrogateModels.find(model => model.id == surrogateId);
+                
+                // Check if it's an inverse model
+                const isInverseModel = selectedModel && selectedModel.is_inverse;
+                
+                // Update the isInverse checkbox
+                isInverse.checked = isInverseModel;
+                
+                // Only hide optimizer if it's an inverse model
+                if (isInverseModel) {
+                    optimizerDiv.classList.add('d-none');
+                    psoParamsDiv.classList.add('d-none');
+                } else {
+                    // For regular surrogate models, show optimizer
+                    optimizerDiv.classList.remove('d-none');
+                    psoParamsDiv.classList.remove('d-none');
+                }
+            } else {
+                // No surrogate selected yet, show optimizer by default
+                optimizerDiv.classList.remove('d-none');
+                psoParamsDiv.classList.remove('d-none');
+            }
+        } else {
+            // Hide surrogate selection when not using surrogate
+            surrogateSelectDiv.classList.add('d-none');
+            
+            // Disable the isInverse checkbox
+            isInverse.disabled = true;
+            isInverse.checked = false;
+            
+            // Always show optimizer when not using surrogate
+            optimizerDiv.classList.remove('d-none');
+            psoParamsDiv.classList.remove('d-none');
+        }
+        
+        checkRunButtonState();
+    }
+
+    function handleSurrogateChange() {
+        const surrogateId = surrogateSelect.value;
+        const caseId = caseSelect.value;
+        
+        if (!surrogateId || !caseId) return;
+        
+        // Show loading indicator
+        inputParametersContainer.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-3">Loading surrogate data...</p></div>';
+        outputParametersContainer.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-3">Loading surrogate data...</p></div>';
+        
+        // Get the selected surrogate model
+        const selectedModel = surrogateModels.find(model => model.id == surrogateId);
+        const isInverseModel = selectedModel && selectedModel.is_inverse;
+        
+        // Update the isInverse checkbox
+        isInverse.checked = isInverseModel;
+        
+        // Show/hide optimizer based on whether it's an inverse model
+        if (isInverseModel) {
+            optimizerDiv.classList.add('d-none');
+            psoParamsDiv.classList.add('d-none');
+        } else {
+            optimizerDiv.classList.remove('d-none');
+            psoParamsDiv.classList.remove('d-none');
+        }
+        
+        // Fetch parameter ranges with surrogate training data
+        fetch(`/calibration/api/parameter_ranges/${caseId}?surrogate_id=${surrogateId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(rangeData => {
+                // Update parameter ranges
+                parameterRanges = rangeData.parameter_ranges;
+                
+                // Get surrogate input/output parameters
+                const surrogateInputs = selectedModel ? selectedModel.active_inputs : [];
+                const surrogateOutputs = selectedModel ? selectedModel.active_outputs : [];
+                
+                // For inverse models, we need to swap inputs and outputs
+                let inputParamsToUse, outputParamsToUse;
+                
+                if (isInverseModel) {
+                    // For inverse models, outputs become inputs and inputs become outputs
+                    // Filter output parameters to use as inputs (for inverse model)
+                    inputParamsToUse = {};
+                    Object.entries(caseParameters.output_params).forEach(([paramName, paramConfig]) => {
+                        if (surrogateInputs.includes(paramName)) {
+                            inputParamsToUse[paramName] = paramConfig;
+                        }
+                    });
+                    
+                    // Filter input parameters to use as outputs (for inverse model)
+                    outputParamsToUse = {};
+                    Object.entries(caseParameters.input_params).forEach(([paramName, paramConfig]) => {
+                        if (surrogateOutputs.includes(paramName)) {
+                            outputParamsToUse[paramName] = paramConfig;
+                        }
+                    });
+                } else {
+                    // For regular models, use normal input/output mapping
+                    // Filter input parameters
+                    inputParamsToUse = {};
+                    Object.entries(caseParameters.input_params).forEach(([paramName, paramConfig]) => {
+                        if (surrogateInputs.includes(paramName)) {
+                            inputParamsToUse[paramName] = paramConfig;
+                        }
+                    });
+                    
+                    // Filter output parameters
+                    outputParamsToUse = {};
+                    Object.entries(caseParameters.output_params).forEach(([paramName, paramConfig]) => {
+                        if (surrogateOutputs.includes(paramName)) {
+                            outputParamsToUse[paramName] = paramConfig;
+                        }
+                    });
+                }
+                
+                console.log("Inverse model:", isInverseModel);
+                console.log("Input params to use:", inputParamsToUse);
+                console.log("Output params to use:", outputParamsToUse);
+                
+                // Re-render input parameters with updated ranges and filtered parameters
+                renderInputParameters(inputParamsToUse, parameterRanges, isInverseModel);
+                
+                // Re-render output parameters, disabling weight and SDEV for inverse models
+                renderOutputParameters(outputParamsToUse, isInverseModel);
+                
+                // Show/hide inverse model info if element exists
+                const inverseModelInfoElement = document.getElementById('inverseModelInfo');
+                if (inverseModelInfoElement) {
+                    inverseModelInfoElement.classList.toggle('d-none', !isInverseModel);
+                }
+                
+                // Update run button state
+                checkRunButtonState();
+            })
+            .catch(error => {
+                console.error('Error fetching parameter ranges:', error);
+                inputParametersContainer.innerHTML = '<div class="alert alert-danger">Error updating parameter ranges: ' + error.message + '</div>';
+                outputParametersContainer.innerHTML = '<div class="alert alert-danger">Error updating parameter ranges: ' + error.message + '</div>';
+            });
+    }
+
+    function renderInputParameters(inputParams, paramRanges, isInverse = false) {
+        inputParametersContainer.innerHTML = '';
+        
+        if (Object.keys(inputParams).length === 0) {
+            inputParametersContainer.innerHTML = '<div class="alert alert-info">No input parameters available</div>';
+            return;
+        }
+        
+        // Create a card for input parameters
+        const card = document.createElement('div');
+        card.className = 'card';
+        
+        const cardHeader = document.createElement('div');
+        cardHeader.className = 'card-header bg-light';
+        
+        // Update header text based on whether it's an inverse model
+        if (isInverse) {
+            cardHeader.innerHTML = '<h6 class="mb-0">Inverse Model Inputs (Flowsheet Outputs)</h6>';
+        } else {
+            cardHeader.innerHTML = '<h6 class="mb-0">Input Parameters (Min-Max Ranges)</h6>';
+        }
+        
+        const cardBody = document.createElement('div');
+        cardBody.className = 'card-body';
+        
+        // If using inverse model, add explanation
+        if (isInverse) {
+            const inverseInfoDiv = document.createElement('div');
+            inverseInfoDiv.className = 'alert alert-info mb-3';
+            inverseInfoDiv.innerHTML = `
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Inverse Model:</strong> These are the <strong>output parameters</strong> from the flowsheet model
+                that will be used as <strong>inputs</strong> to the inverse surrogate model.
+                <br>
+                <small>Set target values for these parameters to calculate the input parameters.</small>
+            `;
+            cardBody.appendChild(inverseInfoDiv);
+            
+            // For inverse models, we use a different table structure - more like the output parameters table
+            // Create table for parameters
+            const tableResponsive = document.createElement('div');
+            tableResponsive.className = 'table-responsive';
+            
+            const table = document.createElement('table');
+            table.className = 'table table-sm table-hover';
+            
+            // Create table header
+            const thead = document.createElement('thead');
+            thead.innerHTML = `
+                <tr>
+                    <th style="width: 40%">Parameter</th>
+                    <th style="width: 60%">Target Value</th>
+                </tr>
+            `;
+            
+            // Create table body
+            const tbody = document.createElement('tbody');
+            
+            // Add each parameter as a table row
+            Object.entries(inputParams).forEach(([paramName, paramInfo]) => {
+                const row = document.createElement('tr');
+                
+                // Parameter name cell with checkbox
+                const nameCell = document.createElement('td');
+                nameCell.innerHTML = `
+                    <div class="form-check">
+                        <input class="form-check-input inverse-input-param-checkbox" type="checkbox" id="check_inv_in_${paramName}" data-param="${paramName}">
+                        <label class="form-check-label" for="check_inv_in_${paramName}">${paramName}</label>
+                    </div>
+                `;
+                
+                // Target value cell
+                const targetCell = document.createElement('td');
+                targetCell.innerHTML = `
+                    <input type="number" class="form-control form-control-sm inverse-param-target" 
+                        id="inv_${paramName}_target" name="inv_${paramName}_target" 
+                        value="${paramInfo.target_value || 0}" 
+                        step="any" disabled data-param="${paramName}">
+                `;
+                
+                // Append cells to row
+                row.appendChild(nameCell);
+                row.appendChild(targetCell);
+                
+                // Add row to tbody
+                tbody.appendChild(row);
+            });
+            
+            // Assemble the table
+            table.appendChild(thead);
+            table.appendChild(tbody);
+            tableResponsive.appendChild(table);
+            
+            // Add select all checkbox for inverse inputs
+            const selectAllDiv = document.createElement('div');
+            selectAllDiv.className = 'mb-3';
+            selectAllDiv.innerHTML = `
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="selectAllInverseInputs">
+                    <label class="form-check-label" for="selectAllInverseInputs"><strong>Select All</strong></label>
+                </div>
+            `;
+            
+            // Add search input
+            const searchDiv = document.createElement('div');
+            searchDiv.className = 'input-group mb-3';
+            searchDiv.innerHTML = `
+                <input type="text" class="form-control" placeholder="Search parameters..." id="inverseInputParamSearch">
+                <button class="btn btn-outline-secondary" type="button" id="clearInverseInputSearch"><i class="bi bi-x"></i></button>
+            `;
+            
+            // Assemble the card
+            cardBody.appendChild(selectAllDiv);
+            cardBody.appendChild(searchDiv);
+            cardBody.appendChild(tableResponsive);
+            
+        } else {
+            // Regular model - use the original input parameters table structure
+            
+            // Add explanation about parameter states
+            const stateInfoDiv = document.createElement('div');
+            stateInfoDiv.className = 'alert alert-info mb-3';
+            stateInfoDiv.innerHTML = `
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Parameter States:</strong>
+                <ul class="mb-0">
+                    <li><strong>Fixed:</strong> Parameter will use the specified value and won't be calibrated</li>
+                    <li><strong>Calibrate:</strong> Parameter will be calibrated within the specified min-max range</li>
+                </ul>
+            `;
+            cardBody.appendChild(stateInfoDiv);
+            
+            // Add select all checkbox
+            const selectAllDiv = document.createElement('div');
+            selectAllDiv.className = 'mb-3';
+            selectAllDiv.innerHTML = `
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="selectAllInputs">
+                    <label class="form-check-label" for="selectAllInputs"><strong>Select All</strong></label>
+                </div>
+            `;
+            
+            // Add search input
+            const searchDiv = document.createElement('div');
+            searchDiv.className = 'input-group mb-3';
+            searchDiv.innerHTML = `
+                <input type="text" class="form-control" placeholder="Search parameters..." id="inputParamSearch">
+                <button class="btn btn-outline-secondary" type="button" id="clearInputSearch"><i class="bi bi-x"></i></button>
+            `;
+            
+            // Create table for parameters
+            const tableResponsive = document.createElement('div');
+            tableResponsive.className = 'table-responsive';
+            
+            const table = document.createElement('table');
+            table.className = 'table table-sm table-hover';
+            
+            // Create table header
+            const thead = document.createElement('thead');
+            thead.innerHTML = `
+                <tr>
+                    <th style="width: 25%">Parameter</th>
+                    <th style="width: 15%">State</th>
+                    <th style="width: 20%">Value</th>
+                    <th style="width: 20%">Min</th>
+                    <th style="width: 20%">Max</th>
+                </tr>
+            `;
+            
+            // Create table body
+            const tbody = document.createElement('tbody');
+            
+            // Add each parameter as a table row
+            Object.entries(inputParams).forEach(([paramName, paramInfo]) => {
+                const row = document.createElement('tr');
+                
+                // Get range info from paramRanges
+                const rangeInfo = paramRanges && paramRanges[paramName] ? paramRanges[paramName] : {};
+                
+                // Use training data ranges if available
+                let minValue = rangeInfo.min !== undefined ? rangeInfo.min : paramInfo.min || 0;
+                let maxValue = rangeInfo.max !== undefined ? rangeInfo.max : paramInfo.max || 1;
+                
+                // Calculate mean value from training data if available, otherwise use default
+                let meanValue = paramInfo.default || 0;
+                if (rangeInfo.source === 'surrogate_training_data') {
+                    minValue = rangeInfo.training_min;
+                    maxValue = rangeInfo.training_max;
+                    // Calculate mean as the average of min and max if not provided
+                    meanValue = rangeInfo.training_mean || ((minValue + maxValue) / 2);
+                }
+                
+                // Parameter name cell
+                const nameCell = document.createElement('td');
+                nameCell.innerHTML = `<label for="state_${paramName}">${paramName}</label>`;
+                
+                // State cell with radio buttons
+                const stateCell = document.createElement('td');
+                stateCell.innerHTML = `
+                    <div class="btn-group btn-group-sm" role="group">
+                        <input type="radio" class="btn-check param-state" name="state_${paramName}" id="fixed_${paramName}" 
+                            value="fixed" checked>
+                        <label class="btn btn-outline-secondary" for="fixed_${paramName}">Fixed</label>
+                        
+                        <input type="radio" class="btn-check param-state" name="state_${paramName}" id="calibrate_${paramName}" 
+                            value="calibrate">
+                        <label class="btn btn-outline-primary" for="calibrate_${paramName}">Calibrate</label>
+                    </div>
+                `;
+                
+                // Value cell (for fixed parameters)
+                const valueCell = document.createElement('td');
+                valueCell.innerHTML = `
+                    <input type="number" class="form-control form-control-sm param-value" 
+                        id="${paramName}_value" name="${paramName}_value" 
+                        value="${meanValue}" 
+                        step="any" data-param="${paramName}">
+                `;
+                
+                // Min value cell
+                const minCell = document.createElement('td');
+                minCell.innerHTML = `
+                    <input type="number" class="form-control form-control-sm param-min" 
+                        id="${paramName}_min" name="${paramName}_min" 
+                        value="${minValue}" 
+                        step="any" disabled data-param="${paramName}">
+                `;
+                
+                // Max value cell
+                const maxCell = document.createElement('td');
+                maxCell.innerHTML = `
+                    <input type="number" class="form-control form-control-sm param-max" 
+                        id="${paramName}_max" name="${paramName}_max" 
+                        value="${maxValue}" 
+                        step="any" disabled data-param="${paramName}">
+                `;
+                
+                // Append cells to row
+                row.appendChild(nameCell);
+                row.appendChild(stateCell);
+                row.appendChild(valueCell);
+                row.appendChild(minCell);
+                row.appendChild(maxCell);
+                
+                // Add row to tbody
+                tbody.appendChild(row);
+            });
+            
+            // Assemble the table
+            table.appendChild(thead);
+            table.appendChild(tbody);
+            tableResponsive.appendChild(table);
+            
+            // Assemble the card
+            cardBody.appendChild(selectAllDiv);
+            cardBody.appendChild(searchDiv);
+            cardBody.appendChild(tableResponsive);
+            
+            // Add event listeners for regular model
+            
+            // Parameter state radio buttons
+            document.querySelectorAll('.param-state').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    const paramName = this.id.split('_')[1];
+                    const isCalibrate = this.value === 'calibrate';
+                    
+                    // Enable/disable min-max inputs based on state
+                    const minInput = document.getElementById(`${paramName}_min`);
+                    const maxInput = document.getElementById(`${paramName}_max`);
+                    const valueInput = document.getElementById(`${paramName}_value`);
+                    
+                    if (minInput) minInput.disabled = !isCalibrate;
+                    if (maxInput) maxInput.disabled = !isCalibrate;
+                    if (valueInput) valueInput.disabled = isCalibrate;
+                    
+                    checkRunButtonState();
+                });
+            });
+        }
+        
+        card.appendChild(cardHeader);
+        card.appendChild(cardBody);
+        
+        // Add to container
+        inputParametersContainer.appendChild(card);
+        
+        // Add event listeners based on model type
+        if (isInverse) {
+            // For inverse model, add event listeners for checkboxes
+            const selectAllCheckbox = document.getElementById('selectAllInverseInputs');
+            if (selectAllCheckbox) {
+                selectAllCheckbox.addEventListener('change', function() {
+                    document.querySelectorAll('.inverse-input-param-checkbox').forEach(checkbox => {
+                        checkbox.checked = this.checked;
+                        
+                        // Enable/disable target input
+                        const paramName = checkbox.dataset.param;
+                        const targetInput = document.getElementById(`inv_${paramName}_target`);
+                        if (targetInput) targetInput.disabled = !this.checked;
+                    });
+                    
+                    checkRunButtonState();
+                });
+            }
+            
+            // Individual parameter checkboxes
+            document.querySelectorAll('.inverse-input-param-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    const paramName = this.dataset.param;
+                    const targetInput = document.getElementById(`inv_${paramName}_target`);
+                    if (targetInput) targetInput.disabled = !this.checked;
+                    
+                    checkRunButtonState();
+                });
+            });
+            
+            // Search functionality
+            const searchInput = document.getElementById('inverseInputParamSearch');
+            const clearSearchBtn = document.getElementById('clearInverseInputSearch');
+            
+            if (searchInput) {
+                searchInput.addEventListener('input', function() {
+                    const searchTerm = this.value.toLowerCase();
+                    const tbody = document.querySelector('.inverse-input-param-checkbox').closest('tbody');
+                    if (tbody) {
+                        tbody.querySelectorAll('tr').forEach(row => {
+                            const paramName = row.querySelector('.form-check-label').textContent.toLowerCase();
+                            if (paramName.includes(searchTerm)) {
+                                row.style.display = '';
+                            } else {
+                                row.style.display = 'none';
+                            }
+                        });
+                    }
+                });
+            }
+            
+            if (clearSearchBtn) {
+                clearSearchBtn.addEventListener('click', function() {
+                    if (searchInput) searchInput.value = '';
+                    const tbody = document.querySelector('.inverse-input-param-checkbox').closest('tbody');
+                    if (tbody) {
+                        tbody.querySelectorAll('tr').forEach(row => {
+                            row.style.display = '';
+                        });
+                    }
+                });
+            }
+        } else {
+            // For regular model, add event listeners
+            const selectAllCheckbox = document.getElementById('selectAllInputs');
+            if (selectAllCheckbox) {
+                selectAllCheckbox.addEventListener('change', function() {
+                    document.querySelectorAll('input[id^="calibrate_"]').forEach(radio => {
+                        radio.checked = this.checked;
+                        
+                        // Trigger change event to update UI
+                        radio.dispatchEvent(new Event('change'));
+                    });
+                    
+                    checkRunButtonState();
+                });
+            }
+            
+            // Search functionality
+            const searchInput = document.getElementById('inputParamSearch');
+            const clearSearchBtn = document.getElementById('clearInputSearch');
+            
+            if (searchInput) {
+                searchInput.addEventListener('input', function() {
+                    const searchTerm = this.value.toLowerCase();
+                    const tbody = document.querySelector('.param-state').closest('tbody');
+                    if (tbody) {
+                        tbody.querySelectorAll('tr').forEach(row => {
+                            const paramName = row.querySelector('label').textContent.toLowerCase();
+                            if (paramName.includes(searchTerm)) {
+                                row.style.display = '';
+                            } else {
+                                row.style.display = 'none';
+                            }
+                        });
+                    }
+                });
+            }
+            
+            if (clearSearchBtn) {
+                clearSearchBtn.addEventListener('click', function() {
+                    if (searchInput) searchInput.value = '';
+                    const tbody = document.querySelector('.param-state').closest('tbody');
+                    if (tbody) {
+                        tbody.querySelectorAll('tr').forEach(row => {
+                            row.style.display = '';
+                        });
+                    }
+                });
+            }
+        }
+    }
+    
+    function renderOutputParameters(outputParams, isInverse = false) {
+        outputParametersContainer.innerHTML = '';
+        
+        if (Object.keys(outputParams).length === 0) {
+            outputParametersContainer.innerHTML = '<div class="alert alert-info">No output parameters available</div>';
+            return;
+        }
+        
+        // Create a card for output parameters
+        const card = document.createElement('div');
+        card.className = 'card';
+        
+        const cardHeader = document.createElement('div');
+        cardHeader.className = 'card-header bg-light';
+        
+        // Update header text based on whether it's an inverse model
+        if (isInverse) {
+            cardHeader.innerHTML = '<h6 class="mb-0">Inverse Model Outputs (Flowsheet Inputs)</h6>';
+        } else {
+            cardHeader.innerHTML = '<h6 class="mb-0">Target Output Parameters</h6>';
+        }
+        
+        const cardBody = document.createElement('div');
+        cardBody.className = 'card-body';
+        
+        // If using inverse model, add explanation
+        if (isInverse) {
+            const inverseInfoDiv = document.createElement('div');
+            inverseInfoDiv.className = 'alert alert-info mb-3';
+            inverseInfoDiv.innerHTML = `
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Inverse Model:</strong> These are the <strong>input parameters</strong> to the flowsheet model
+                that will be predicted by the inverse surrogate model.
+                <br>
+                <small>These values will be calculated automatically based on the target values you set above.</small>
+            `;
+            cardBody.appendChild(inverseInfoDiv);
+            
+            // For inverse models, we show a read-only list of parameters that will be calculated
+            const tableResponsive = document.createElement('div');
+            tableResponsive.className = 'table-responsive';
+            
+            const table = document.createElement('table');
+            table.className = 'table table-sm table-hover';
+            
+            // Create table header
+            const thead = document.createElement('thead');
+            thead.innerHTML = `
+                <tr>
+                    <th>Parameter</th>
+                    <th>Description</th>
+                </tr>
+            `;
+            
+            // Create table body
+            const tbody = document.createElement('tbody');
+            
+            // Add each parameter as a table row
+            Object.entries(outputParams).forEach(([paramName, paramInfo]) => {
+                const row = document.createElement('tr');
+                
+                // Parameter name cell
+                const nameCell = document.createElement('td');
+                nameCell.innerHTML = `<strong>${paramName}</strong>`;
+                
+                // Description cell
+                const descCell = document.createElement('td');
+                descCell.innerHTML = `This parameter will be calculated by the inverse model`;
+                
+                // Append cells to row
+                row.appendChild(nameCell);
+                row.appendChild(descCell);
+                
+                // Add row to tbody
+                tbody.appendChild(row);
+            });
+            
+            // Assemble the table
+            table.appendChild(thead);
+            table.appendChild(tbody);
+            tableResponsive.appendChild(table);
+            
+            // Add search input for inverse outputs
+            const searchDiv = document.createElement('div');
+            searchDiv.className = 'input-group mb-3';
+            searchDiv.innerHTML = `
+                <input type="text" class="form-control" placeholder="Search parameters..." id="inverseOutputParamSearch">
+                <button class="btn btn-outline-secondary" type="button" id="clearInverseOutputSearch"><i class="bi bi-x"></i></button>
+            `;
+            
+            // Assemble the card
+            cardBody.appendChild(searchDiv);
+            cardBody.appendChild(tableResponsive);
+            
+        } else {
+            // Regular model - use the original output parameters table structure
+            
+            // Add select all checkbox
+            const selectAllDiv = document.createElement('div');
+            selectAllDiv.className = 'mb-3';
+            selectAllDiv.innerHTML = `
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="selectAllOutputs">
+                    <label class="form-check-label" for="selectAllOutputs"><strong>Select All</strong></label>
+                </div>
+            `;
+            
+            // Add search input
+            const searchDiv = document.createElement('div');
+            searchDiv.className = 'input-group mb-3';
+            searchDiv.innerHTML = `
+                <input type="text" class="form-control" placeholder="Search parameters..." id="outputParamSearch">
+                <button class="btn btn-outline-secondary" type="button" id="clearOutputSearch"><i class="bi bi-x"></i></button>
+            `;
+            
+            // Create table for parameters
+            const tableResponsive = document.createElement('div');
+            tableResponsive.className = 'table-responsive';
+            
+            const table = document.createElement('table');
+            table.className = 'table table-sm table-hover';
+            
+            // Create table header
+            const thead = document.createElement('thead');
+            thead.innerHTML = `
+                <tr>
+                    <th style="width: 25%">Parameter</th>
+                    <th style="width: 25%">Target Value</th>
+                    <th style="width: 25%">Weight</th>
+                    <th style="width: 25%">SDEV</th>
+                </tr>
+            `;
+            
+            // Create table body
+            const tbody = document.createElement('tbody');
+            
+            // Add each parameter as a table row
+            Object.entries(outputParams).forEach(([paramName, paramInfo]) => {
+                const row = document.createElement('tr');
+                
+                // Parameter name cell with checkbox
+                const nameCell = document.createElement('td');
+                nameCell.innerHTML = `
+                    <div class="form-check">
+                        <input class="form-check-input output-param-checkbox" type="checkbox" id="check_out_${paramName}" data-param="${paramName}">
+                        <label class="form-check-label" for="check_out_${paramName}">${paramName}</label>
+                    </div>
+                `;
+                
+                // Target value cell
+                const targetCell = document.createElement('td');
+                targetCell.innerHTML = `
+                    <input type="number" class="form-control form-control-sm param-target" 
+                        id="${paramName}_target" name="${paramName}_target" 
+                        value="${paramInfo.target_value || 0}" 
+                        step="any" disabled data-param="${paramName}">
+                `;
+                
+                // Weight cell
+                const weightCell = document.createElement('td');
+                weightCell.innerHTML = `
+                    <input type="number" class="form-control form-control-sm param-weight" 
+                        id="${paramName}_weight" name="${paramName}_weight" 
+                        value="${paramInfo.weight || 1.0}" min="0" max="1" step="0.01" 
+                        disabled data-param="${paramName}">
+                `;
+                
+                // SDEV cell
+                const sdevCell = document.createElement('td');
+                sdevCell.innerHTML = `
+                    <input type="number" class="form-control form-control-sm param-sdev" 
+                        id="${paramName}_sdev" name="${paramName}_sdev" 
+                        value="${paramInfo.sdev || 0.1}" min="0.0001" step="0.01" 
+                        disabled data-param="${paramName}">
+                `;
+                
+                // Append cells to row
+                row.appendChild(nameCell);
+                row.appendChild(targetCell);
+                row.appendChild(weightCell);
+                row.appendChild(sdevCell);
+                
+                // Add row to tbody
+                tbody.appendChild(row);
+            });
+            
+            // Assemble the table
+            table.appendChild(thead);
+            table.appendChild(tbody);
+            tableResponsive.appendChild(table);
+            
+            // Assemble the card
+            cardBody.appendChild(selectAllDiv);
+            cardBody.appendChild(searchDiv);
+            cardBody.appendChild(tableResponsive);
+        }
+        
+        card.appendChild(cardHeader);
+        card.appendChild(cardBody);
+        
+        // Add to container
+        outputParametersContainer.appendChild(card);
+        
+        // Add event listeners based on model type
+        if (isInverse) {
+            // For inverse model, add search functionality
+            const searchInput = document.getElementById('inverseOutputParamSearch');
+            const clearSearchBtn = document.getElementById('clearInverseOutputSearch');
+            
+            if (searchInput) {
+                searchInput.addEventListener('input', function() {
+                    const searchTerm = this.value.toLowerCase();
+                    const tbody = searchInput.closest('.card-body').querySelector('tbody');
+                    if (tbody) {
+                        tbody.querySelectorAll('tr').forEach(row => {
+                            const paramName = row.querySelector('td').textContent.toLowerCase();
+                            if (paramName.includes(searchTerm)) {
+                                row.style.display = '';
+                            } else {
+                                row.style.display = 'none';
+                            }
+                        });
+                    }
+                });
+            }
+            
+            if (clearSearchBtn) {
+                clearSearchBtn.addEventListener('click', function() {
+                    if (searchInput) searchInput.value = '';
+                    const tbody = clearSearchBtn.closest('.card-body').querySelector('tbody');
+                    if (tbody) {
+                        tbody.querySelectorAll('tr').forEach(row => {
+                            row.style.display = '';
+                        });
+                    }
+                });
+            }
+        } else {
+            // For regular model, add event listeners
+            const selectAllCheckbox = document.getElementById('selectAllOutputs');
+            if (selectAllCheckbox) {
+                selectAllCheckbox.addEventListener('change', function() {
+                    document.querySelectorAll('.output-param-checkbox').forEach(checkbox => {
+                        checkbox.checked = this.checked;
+                        
+                        // Enable/disable inputs
+                        const paramName = checkbox.dataset.param;
+                        const targetInput = document.getElementById(`${paramName}_target`);
+                        const weightInput = document.getElementById(`${paramName}_weight`);
+                        const sdevInput = document.getElementById(`${paramName}_sdev`);
+                        
+                        if (targetInput) targetInput.disabled = !this.checked;
+                        if (weightInput) weightInput.disabled = !this.checked;
+                        if (sdevInput) sdevInput.disabled = !this.checked;
+                    });
+                    
+                    checkRunButtonState();
+                });
+            }
+            
+            // Individual parameter checkboxes
+            document.querySelectorAll('.output-param-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    const paramName = this.dataset.param;
+                    const targetInput = document.getElementById(`${paramName}_target`);
+                    const weightInput = document.getElementById(`${paramName}_weight`);
+                    const sdevInput = document.getElementById(`${paramName}_sdev`);
+                    
+                    if (targetInput) targetInput.disabled = !this.checked;
+                    if (weightInput) weightInput.disabled = !this.checked;
+                    if (sdevInput) sdevInput.disabled = !this.checked;
+                    
+                    checkRunButtonState();
+                });
+            });
+            
+            // Search functionality
+            const searchInput = document.getElementById('outputParamSearch');
+            const clearSearchBtn = document.getElementById('clearOutputSearch');
+            
+            if (searchInput) {
+                searchInput.addEventListener('input', function() {
+                    const searchTerm = this.value.toLowerCase();
+                    const tbody = searchInput.closest('.card-body').querySelector('tbody');
+                    if (tbody) {
+                        tbody.querySelectorAll('tr').forEach(row => {
+                            const paramName = row.querySelector('.form-check-label').textContent.toLowerCase();
+                            if (paramName.includes(searchTerm)) {
+                                row.style.display = '';
+                            } else {
+                                row.style.display = 'none';
+                            }
+                        });
+                    }
+                });
+            }
+            
+            if (clearSearchBtn) {
+                clearSearchBtn.addEventListener('click', function() {
+                    if (searchInput) searchInput.value = '';
+                    const tbody = clearSearchBtn.closest('.card-body').querySelector('tbody');
+                    if (tbody) {
+                        tbody.querySelectorAll('tr').forEach(row => {
+                            row.style.display = '';
+                        });
+                    }
+                });
+            }
+        }
+    }
+
+    function updateParameterSelectionFromSurrogate(surrogateModel) {
+        // Clear current selections
+        document.querySelectorAll('.input-param-checkbox').forEach(checkbox => {
+            checkbox.checked = false;
+            const paramName = checkbox.dataset.paramName;
+            const rangeInput = document.querySelector(`#range_${paramName}`);
+            const valueInput = document.querySelector(`#value_${paramName}`);
+            const paramCard = checkbox.closest('.parameter-card');
+            
+            if (rangeInput) rangeInput.disabled = true;
+            if (valueInput) valueInput.disabled = true;
+            if (paramCard) paramCard.classList.remove('selected-parameter');
+        });
+        
+        document.querySelectorAll('.output-param-checkbox').forEach(checkbox => {
+            checkbox.checked = false;
+            const paramName = checkbox.dataset.paramName;
+            const targetInput = document.querySelector(`#target_${paramName}`);
+            const weightInput = document.querySelector(`#weight_${paramName}`);
+            const sdevInput = document.querySelector(`#sdev_${paramName}`);
+            const tooltipBtn = checkbox.closest('.card-body').querySelector('button[data-bs-toggle="tooltip"]');
+            const paramCard = checkbox.closest('.parameter-card');
+            
+            if (targetInput) targetInput.disabled = true;
+            if (weightInput) weightInput.disabled = true;
+            if (sdevInput) sdevInput.disabled = true;
+            if (tooltipBtn) tooltipBtn.disabled = true;
+            if (paramCard) paramCard.classList.remove('selected-parameter');
+        });
+        
+        selectedInputs = [];
+        selectedOutputs = [];
+        
+        // Select inputs based on surrogate model
+        if (surrogateModel.is_inverse) {
+            // For inverse models, select outputs as inputs
+            surrogateModel.active_inputs.forEach(paramName => {
+                const checkbox = document.querySelector(`#output_${paramName}`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                    checkbox.dispatchEvent(new Event('change'));
+                }
+            });
+        } else {
+            // For forward models, select inputs as inputs
+            surrogateModel.active_inputs.forEach(paramName => {
+                const checkbox = document.querySelector(`#input_${paramName}`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                    checkbox.dispatchEvent(new Event('change'));
+                }
+            });
+        }
+        
+        // Select outputs based on surrogate model
+        if (surrogateModel.is_inverse) {
+            // For inverse models, select inputs as outputs
+            surrogateModel.active_outputs.forEach(paramName => {
+                const checkbox = document.querySelector(`#input_${paramName}`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                    checkbox.dispatchEvent(new Event('change'));
+                }
+            });
+        } else {
+            // For forward models, select outputs as outputs
+            surrogateModel.active_outputs.forEach(paramName => {
+                const checkbox = document.querySelector(`#output_${paramName}`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                    checkbox.dispatchEvent(new Event('change'));
+                }
+            });
+        }
+    }
+    
+    function checkRunButtonState() {
+        // Get selected surrogate model info
+        const surrogateElement = document.getElementById('useSurrogate');
+        const surrogateSelected = surrogateElement && surrogateElement.checked;
+        
+        // Get selected surrogate model info
+        const surrogateId = document.getElementById('surrogateSelect').value;
+        const selectedModel = surrogateId && surrogateModels ? 
+            surrogateModels.find(model => model.id == surrogateId) : null;
+        const isInverseModel = selectedModel && selectedModel.is_inverse;
+        
+        if (isInverseModel) {
+            // For inverse models, check if at least one inverse input parameter is selected
+            const selectedInverseInputs = Array.from(document.querySelectorAll('.inverse-input-param-checkbox:checked')).length;
+            
+            // Enable run button if at least one inverse input parameter is selected
+            runCalibrationBtn.disabled = selectedInverseInputs === 0;
+        } else {
+            // For regular models, check if at least one input parameter is set to calibrate and one output is selected
+            const selectedInputs = Array.from(document.querySelectorAll('input[id^="calibrate_"]:checked')).length;
+            const selectedOutputs = Array.from(document.querySelectorAll('.output-param-checkbox:checked')).length;
+            
+            // Enable run button if at least one input and one output selected
+            runCalibrationBtn.disabled = selectedInputs === 0 || selectedOutputs === 0;
+        }
+    }
+
+
+    function collectFormData() {
+        // Get selected surrogate model info
+        const surrogateId = document.getElementById('surrogateSelect').value;
+        const selectedModel = surrogateId && surrogateModels ? 
+            surrogateModels.find(model => model.id == surrogateId) : null;
+        const isInverseModel = selectedModel && selectedModel.is_inverse;
+        
+        const formData = {
+            name: document.getElementById('calibrationName').value || `Calibration ${new Date().toLocaleString()}`,
+            case_id: parseInt(caseSelect.value),
+            use_surrogate: useSurrogate.checked,
+            surrogate_id: useSurrogate.checked ? parseInt(surrogateSelect.value) : null,
+            is_inverse: isInverseModel,
+            optimizer: document.getElementById('optimizerSelect').value,
+            pso_params: {
+                particles: parseInt(document.getElementById('particles').value),
+                iterations: parseInt(document.getElementById('iterations').value),
+                c1: parseFloat(document.getElementById('c1').value),
+                c2: parseFloat(document.getElementById('c2').value),
+                w: parseFloat(document.getElementById('w').value),
+                // Add the new stopping threshold parameters
+                stopping_threshold: parseFloat(document.getElementById('stopping_threshold').value),
+                stopping_MSE: parseFloat(document.getElementById('stopping_MSE').value),
+                debug: false
+            },
+            input_params: {},        // All input parameters with their values
+            calibrate_params: {},    // Only parameters to calibrate with min/max
+            fixed_params: {},        // Fixed parameters with their values
+            output_params: {},
+            target_values: {},
+            weights: {},
+            sdevs: {}
+        };
+        
+        if (isInverseModel) {
+            // For inverse models, collect target values from the inverse input parameters section
+            document.querySelectorAll('.inverse-input-param-checkbox:checked').forEach(checkbox => {
+                const paramName = checkbox.dataset.param;
+                const targetInput = document.getElementById(`inv_${paramName}_target`);
+                
+                if (targetInput) {
+                    // For inverse models, these are the inputs to the inverse model (flowsheet outputs)
+                    formData.target_values[paramName] = parseFloat(targetInput.value);
+                    
+                    // Use default values for weight and SDEV
+                    formData.weights[paramName] = 1.0;
+                    formData.sdevs[paramName] = 0.1;
+                    
+                    // Add to output_params for reference
+                    formData.output_params[paramName] = {
+                        target_value: formData.target_values[paramName],
+                        weight: 1.0,
+                        sdev: 0.1
+                    };
+                }
+            });
+            
+            // The outputs of the inverse model (flowsheet inputs) don't need to be collected
+            // as they will be calculated by the inverse model
+        } else {
+            // For regular models, collect input parameters as usual
+            document.querySelectorAll('input[id^="calibrate_"]:checked').forEach(radio => {
+                const paramName = radio.id.split('_')[1];
+                const minInput = document.getElementById(`${paramName}_min`);
+                const maxInput = document.getElementById(`${paramName}_max`);
+                
+                if (minInput && maxInput) {
+                    formData.calibrate_params[paramName] = {
+                        min: parseFloat(minInput.value),
+                        max: parseFloat(maxInput.value)
+                    };
+                }
+            });
+            
+            // Collect fixed parameters
+            document.querySelectorAll('input[id^="fixed_"]:checked').forEach(radio => {
+                const paramName = radio.id.split('_')[1];
+                const valueInput = document.getElementById(`${paramName}_value`);
+                
+                if (valueInput) {
+                    formData.fixed_params[paramName] = parseFloat(valueInput.value);
+                }
+            });
+            
+            // Collect output parameters
+            document.querySelectorAll('.output-param-checkbox:checked').forEach(checkbox => {
+                const paramName = checkbox.dataset.param;
+                const targetInput = document.getElementById(`${paramName}_target`);
+                
+                if (targetInput) {
+                    formData.target_values[paramName] = parseFloat(targetInput.value);
+                    
+                    const weightInput = document.getElementById(`${paramName}_weight`);
+                    const sdevInput = document.getElementById(`${paramName}_sdev`);
+                    
+                    if (weightInput) formData.weights[paramName] = parseFloat(weightInput.value);
+                    if (sdevInput) formData.sdevs[paramName] = parseFloat(sdevInput.value);
+                    
+                    // Also add to output_params for reference
+                    formData.output_params[paramName] = {
+                        target_value: formData.target_values[paramName],
+                        weight: formData.weights[paramName],
+                        sdev: formData.sdevs[paramName]
+                    };
+                }
+            });
+        }
+        
+        return formData;
+    }
+
+    function runCalibration() {
+        const formData = collectFormData();
+        
+        // Show loading overlay
+        loadingOverlay.classList.remove('d-none');
+        
+        // Set appropriate loading message based on model type
+        if (formData.is_inverse) {
+            loadingMessage.textContent = 'Calculating parameters using inverse model...';
+            loadingDetails.textContent = 'This should be quick';
+        } else {
+            loadingMessage.textContent = 'Running calibration...';
+            loadingDetails.textContent = 'This may take a few minutes';
+        }
+        
+        // Send request to run calibration
+        fetch('/calibration/api/run_calibration', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || 'Error running calibration');
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Hide loading overlay
+            loadingOverlay.classList.add('d-none');
+            
+            // Store results
+            calibrationResults = data;
+            
+            // Display results
+            displayResults(data);
+            
+            // Show results section
+            resultsSection.classList.remove('d-none');
+            
+            // Scroll to results
+            resultsSection.scrollIntoView({ behavior: 'smooth' });
+        })
+        .catch(error => {
+            console.error('Error running calibration:', error);
+            loadingOverlay.classList.add('d-none');
+            alert(`Error: ${error.message}`);
+        });
+    }
+    
+    function displayResults(results) {
+        console.log('Results received from backend:', results);
+        
+        // Display calibrated parameters
+        const calibratedParamsBody = document.getElementById('calibratedParamsBody');
+        calibratedParamsBody.innerHTML = '';
+        
+        if (results.calibration_result) {
+            Object.entries(results.calibration_result).forEach(([param, value]) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${param}</td>
+                    <td>${typeof value === 'number' ? value.toFixed(6) : value}</td>
+                `;
+                calibratedParamsBody.appendChild(row);
+            });
+        } else {
+            console.error('No calibration_result in results');
+        }
+        
+        // Display output comparison
+        const outputComparisonBody = document.getElementById('outputComparisonBody');
+        outputComparisonBody.innerHTML = '';
+        
+        if (results.metrics) {
+            console.log('Metrics:', results.metrics);
+            Object.keys(results.metrics).forEach(param => {
+                const metrics = results.metrics[param];
+                console.log(`Metrics for ${param}:`, metrics);
+                
+                const row = document.createElement('tr');
+                
+                // Calculate relative error as percentage
+                const relError = metrics.sim_relative_error !== Infinity 
+                    ? `${metrics.sim_relative_error.toFixed(2)}%` 
+                    : 'N/A';
+                
+                row.innerHTML = `
+                    <td>${param}</td>
+                    <td>${metrics.true_value.toFixed(6)}</td>
+                    <td>${results.surrogate_result && results.surrogate_result[param] ? 
+                        results.surrogate_result[param].toFixed(6) : 'N/A'}</td>
+                    <td>${metrics.simulation_value.toFixed(6)}</td>
+                    <td>${relError}</td>
+                `;
+                outputComparisonBody.appendChild(row);
+            });
+        } else {
+            console.error('No metrics in results');
+            outputComparisonBody.innerHTML = '<tr><td colspan="5" class="text-center">No metrics available</td></tr>';
+        }
+        
+        // Display metrics
+        const metricsTableBody = document.getElementById('metricsTableBody');
+        metricsTableBody.innerHTML = '';
+        
+        if (results.overall_metrics) {
+            console.log('Overall metrics:', results.overall_metrics);
+            Object.entries(results.overall_metrics).forEach(([metric, value]) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><strong>${formatMetricName(metric)}</strong></td>
+                    <td>${typeof value === 'number' ? value.toFixed(6) : value}</td>
+                `;
+                metricsTableBody.appendChild(row);
+            });
+        } else {
+            console.error('No overall_metrics in results');
+            metricsTableBody.innerHTML = '<tr><td colspan="2" class="text-center">No overall metrics available</td></tr>';
+        }
+        
+        // Create convergence plot
+        if (results.costs_values) {
+            createConvergencePlot(results.costs_values);
+        } else {
+            console.error('No costs_values in results');
+        }
+    }
+ 
+    function formatMetricName(metric) {
+        const metricMap = {
+            'sim_mean_abs_error': 'Mean Absolute Error',
+            'sim_mean_rel_error': 'Mean Relative Error (%)',
+            'surr_mean_abs_error': 'Surrogate Mean Absolute Error',
+            'surr_mean_rel_error': 'Surrogate Mean Relative Error (%)',
+            'mse': 'Mean Squared Error',
+            'rmse': 'Root Mean Squared Error',
+            'mae': 'Mean Absolute Error',
+            'r2': 'R² Score'
+        };
+        
+        return metricMap[metric] || metric;
+    }
+    
+    function createConvergencePlot(costsData) {
+        const ctx = document.getElementById('convergencePlot').getContext('2d');
+        
+        // Extract minimum cost at each iteration
+        const iterations = [];
+        const costs = [];
+        
+        costsData.forEach((iterationCosts, index) => {
+            iterations.push(index);
+            costs.push(Math.min(...iterationCosts));
+        });
+        
+        // Create chart
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: iterations,
+                datasets: [{
+                    label: 'Best Cost',
+                    data: costs,
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    tension: 0.1,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        title: {
+                            display: true,
+                            text: 'Cost'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Iteration'
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Optimization Convergence'
+                    }
+                }
+            }
+        });
+    }
+    
+    function saveResults() {
+        if (!calibrationResults) {
+            alert('No results to save');
+            return;
+        }
+        
+        const formData = collectFormData();
+        
+        // Prepare data for saving
+        const saveData = {
+            name: formData.name,
+            case_id: formData.case_id,
+            simulation_type: `Calibration (${formData.optimizer.toUpperCase()})`,
+            data: {
+                ...formData,
+                calibration_result: calibrationResults.calibration_result,
+                simulation_result: calibrationResults.simulation_result,
+                surrogate_result: calibrationResults.surrogate_result,
+                metrics: calibrationResults.metrics,
+                overall_metrics: calibrationResults.overall_metrics,
+                timestamp: new Date().toISOString()
+            }
+        };
+        
+        // Show loading overlay
+        loadingOverlay.classList.remove('d-none');
+        loadingMessage.textContent = 'Saving results...';
+        loadingDetails.textContent = 'Please wait';
+        
+        // Send request to save results
+        fetch('/calibration/api/save_results', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(saveData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || 'Error saving results');
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Hide loading overlay
+            loadingOverlay.classList.add('d-none');
+            
+            // Show success message
+            alert('Results saved successfully');
+            
+            // Redirect to calibration details page
+            window.location.href = `/calibration/details/${data.result_id}`;
+        })
+        .catch(error => {
+            console.error('Error saving results:', error);
+            loadingOverlay.classList.add('d-none');
+            alert(`Error: ${error.message}`);
+        });
+    }
+});
+</script>
+{% endblock %}

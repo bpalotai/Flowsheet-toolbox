@@ -1,0 +1,2062 @@
+{% extends "base.html" %}
+
+{% block title %}Parameter Sampling | Simulation Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-grid-3x3 text-primary me-2"></i>Parameter Sampling</h1>
+    <a href="{{ url_for('cases.list_cases') }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Cases
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Select Case and Parameters</h5>
+            </div>
+            <div class="card-body">
+                <form id="samplingSetupForm">
+                    <div class="mb-3">
+                        <label for="caseSelect" class="form-label">Select Case</label>
+                        <select class="form-select" id="caseSelect" required>
+                            <option value="">-- Select a case --</option>
+                            {% for case in cases %}
+                            <option value="{{ case.id }}">{{ case.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="samplingMethod" class="form-label">Sampling Method</label>
+                                <select class="form-select" id="samplingMethod" required>
+                                    <option value="lhs">Latin Hypercube Sampling (LHS)</option>
+                                    <option value="random">Random Sampling</option>
+                                    <option value="full_factorial">Full Factorial Sampling</option>
+                                    <option value="montecarlo">Monte Carlo Sampling</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="numSamples" class="form-label">Number of Samples</label>
+                                <input type="number" class="form-control" id="numSamples" min="1" max="10000" value="100" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        All output parameters will be automatically collected during simulation.
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0">Energy & Material Streams</h6>
+                                </div>
+                                <div class="card-body" id="streamsParamsContainer">
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        Select a case to load available stream parameters.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0">Spreadsheet Parameters</h6>
+                                </div>
+                                <div class="card-body" id="spreadsheetParamsContainer">
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        Select a case to load available spreadsheet parameters.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end">
+                        <button type="button" id="generateSamplesBtn" class="btn btn-primary" disabled>
+                            <i class="bi bi-grid-3x3"></i> Generate Samples
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-12" id="samplingResultsSection" style="display: none;">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Sampling Results</h5>
+                <div class="btn-group">
+                    <button type="button" id="saveSamplingBtn" class="btn btn-success">
+                        <i class="bi bi-save"></i> Save Sampling
+                    </button>
+                    <button type="button" id="downloadSamplingBtn" class="btn btn-info">
+                        <i class="bi bi-download"></i> Download
+                    </button>
+                    <button type="button" id="runSimulationsBtn" class="btn btn-primary">
+                        <i class="bi bi-play-fill"></i> Run Simulations
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <ul class="nav nav-tabs" id="resultsTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="table-tab" data-bs-toggle="tab" data-bs-target="#table-content" type="button" role="tab" aria-controls="table-content" aria-selected="true">
+                            <i class="bi bi-table me-2"></i>Data Table
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="visualization-tab" data-bs-toggle="tab" data-bs-target="#visualization-content" type="button" role="tab" aria-controls="visualization-content" aria-selected="false">
+                            <i class="bi bi-graph-up me-2"></i>Visualizations
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="statistics-tab" data-bs-toggle="tab" data-bs-target="#statistics-content" type="button" role="tab" aria-controls="statistics-content" aria-selected="false">
+                            <i class="bi bi-bar-chart me-2"></i>Statistics
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content p-3" id="resultsTabContent">
+                    <div class="tab-pane fade show active" id="table-content" role="tabpanel" aria-labelledby="table-tab">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover" id="samplingDataTable">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <!-- Parameter headers will be added dynamically -->
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Sampling data rows will be added dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="tab-pane fade" id="visualization-content" role="tabpanel" aria-labelledby="visualization-tab">
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-header bg-light">
+                                        <h6 class="mb-0">Visualization Settings</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <label for="plotType" class="form-label">Plot Type</label>
+                                            <select class="form-select" id="plotType">
+                                                <option value="histogram">Histogram</option>
+                                                <option value="normal">Normal Plot</option>
+                                                <option value="boxplot">Box Plot</option>
+                                                <option value="heatmap">Correlation Heatmap</option>
+                                                <option value="parallel">Parallel Coordinates</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div id="normalPlotOptions">
+                                            <div class="mb-3">
+                                                <label for="normalParam" class="form-label">Parameter</label>
+                                                <select class="form-select" id="normalParam">
+                                                    <!-- Options will be added dynamically -->
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        <div id="histogramOptions" style="display: none;">
+                                            <div class="mb-3">
+                                                <label for="histParam" class="form-label">Parameter</label>
+                                                <select class="form-select" id="histParam">
+                                                    <!-- Options will be added dynamically -->
+                                                </select>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="binCount" class="form-label">Number of Bins</label>
+                                                <input type="number" class="form-control" id="binCount" min="5" max="100" value="20">
+                                            </div>
+                                        </div>
+                                        
+                                        <div id="boxplotOptions" style="display: none;">
+                                            <div class="mb-3">
+                                                <label for="boxParam" class="form-label">Parameter</label>
+                                                <select class="form-select" id="boxParam">
+                                                    <!-- Options will be added dynamically -->
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        <button type="button" id="updatePlotBtn" class="btn btn-primary w-100">
+                                            <i class="bi bi-arrow-repeat"></i> Update Plot
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-8">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <div id="plotContainer" style="height: 500px;">
+                                            <!-- Plot will be rendered here -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="tab-pane fade" id="statistics-content" role="tabpanel" aria-labelledby="statistics-tab">
+                        <div class="row">
+                            <div class="col-md-12 mb-3">
+                                <div class="card">
+                                    <div class="card-header bg-light">
+                                        <h6 class="mb-0">Summary Statistics</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="table-responsive">
+                                            <table class="table table-sm" id="statisticsTable">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Parameter</th>
+                                                        <th>Min</th>
+                                                        <th>Max</th>
+                                                        <th>Mean</th>
+                                                        <th>Median</th>
+                                                        <th>Std Dev</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <!-- Statistics will be added dynamically -->
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Save Sampling Modal -->
+<div class="modal fade" id="saveSamplingModal" tabindex="-1" aria-labelledby="saveSamplingModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="saveSamplingModalLabel">Save Sampling</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="saveSamplingForm">
+                    <div class="mb-3">
+                        <label for="samplingName" class="form-label">Sampling Name</label>
+                        <input type="text" class="form-control" id="samplingName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="samplingDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="samplingDescription" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmSaveBtn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Component Parameters Modal -->
+<div class="modal fade" id="componentParamModal" tabindex="-1" aria-labelledby="componentParamModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="componentParamModalLabel">Configure Component Parameter Ranges</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div id="componentParamInfo" class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <span id="componentParamDescription">Define sampling ranges for each component.</span>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover" id="componentRangeTable">
+                        <thead>
+                            <tr>
+                                <th>Component</th>
+                                <th>Min Value</th>
+                                <th>Max Value</th>
+                                <th>Distribution</th>
+                                <th>Unit</th>
+                            </tr>
+                        </thead>
+                        <tbody id="componentRangeTableBody">
+                            <!-- Component rows will be added here dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveComponentRangesBtn">Save Ranges</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.plot.ly/plotly-2.14.0.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // DOM elements
+    const caseSelect = document.getElementById('caseSelect');
+    const samplingMethod = document.getElementById('samplingMethod');
+    const numSamples = document.getElementById('numSamples');
+    const streamsParamsContainer = document.getElementById('streamsParamsContainer');
+    const spreadsheetParamsContainer = document.getElementById('spreadsheetParamsContainer');
+    const generateSamplesBtn = document.getElementById('generateSamplesBtn');
+    const samplingResultsSection = document.getElementById('samplingResultsSection');
+    const samplingDataTable = document.getElementById('samplingDataTable');
+    const saveSamplingBtn = document.getElementById('saveSamplingBtn');
+    const downloadSamplingBtn = document.getElementById('downloadSamplingBtn');
+    const runSimulationsBtn = document.getElementById('runSimulationsBtn');
+    const updatePlotBtn = document.getElementById('updatePlotBtn');
+    
+    // Modals
+    const saveSamplingModal = new bootstrap.Modal(document.getElementById('saveSamplingModal'));
+    const componentParamModal = new bootstrap.Modal(document.getElementById('componentParamModal'));
+    
+    // State variables
+    let caseId = null;
+    let caseName = null;
+    let caseParameters = null;
+    let selectedInputParams = [];
+    let samplingData = null;
+    let componentData = {};
+    let paramRanges = {};
+    
+    // Event listeners
+    caseSelect.addEventListener('change', loadCaseParameters);
+    generateSamplesBtn.addEventListener('click', generateSamples);
+    saveSamplingBtn.addEventListener('click', () => saveSamplingModal.show());
+    downloadSamplingBtn.addEventListener('click', downloadSampling);
+    runSimulationsBtn.addEventListener('click', runSimulations);
+    document.getElementById('confirmSaveBtn').addEventListener('click', saveSampling);
+    document.getElementById('saveComponentRangesBtn').addEventListener('click', saveComponentRanges);
+    
+    // Add event listener for sampling method change to show/hide distribution options
+    samplingMethod.addEventListener('change', function() {
+        updateDistributionOptions();
+    });
+    
+    // Plot-related event listeners
+    document.getElementById('plotType').addEventListener('change', updatePlotOptions);
+    updatePlotBtn.addEventListener('click', updatePlot);
+    
+    // Function to update distribution options based on sampling method
+    function updateDistributionOptions() {
+        const method = samplingMethod.value;
+        
+        // Find all distribution selectors
+        const distributionSelectors = document.querySelectorAll('.param-distribution');
+        
+        // Show distribution selectors only for Monte Carlo sampling
+        distributionSelectors.forEach(selector => {
+            const paramRow = selector.closest('tr');
+            if (method === 'montecarlo') {
+                selector.style.display = '';
+                if (paramRow) {
+                    // Adjust column widths for Monte Carlo sampling
+                    const minInput = paramRow.querySelector('.param-min');
+                    const maxInput = paramRow.querySelector('.param-max');
+                    if (minInput && maxInput) {
+                        minInput.classList.remove('col-6');
+                        minInput.classList.add('col-4');
+                        maxInput.classList.remove('col-6');
+                        maxInput.classList.add('col-4');
+                    }
+                }
+            } else {
+                selector.style.display = 'none';
+                if (paramRow) {
+                    // Reset column widths for other sampling methods
+                    const minInput = paramRow.querySelector('.param-min');
+                    const maxInput = paramRow.querySelector('.param-max');
+                    if (minInput && maxInput) {
+                        minInput.classList.remove('col-4');
+                        minInput.classList.add('col-6');
+                        maxInput.classList.remove('col-4');
+                        maxInput.classList.add('col-6');
+                    }
+                }
+            }
+        });
+        
+        // Also update component modal distribution options
+        const componentDistributions = document.querySelectorAll('.component-distribution');
+        componentDistributions.forEach(selector => {
+            if (method === 'montecarlo') {
+                selector.removeAttribute('disabled');
+            } else {
+                selector.setAttribute('disabled', 'disabled');
+                selector.value = 'uniform'; // Reset to uniform for other methods
+            }
+        });
+    }
+    
+    // Function to load case parameters
+    function loadCaseParameters() {
+        caseId = caseSelect.value;
+        if (!caseId) {
+            streamsParamsContainer.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>Select a case to load available stream parameters.</div>';
+            spreadsheetParamsContainer.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>Select a case to load available spreadsheet parameters.</div>';
+            generateSamplesBtn.disabled = true;
+            return;
+        }
+        
+        caseName = caseSelect.options[caseSelect.selectedIndex].text;
+        
+        // Show loading indicators
+        streamsParamsContainer.innerHTML = '<div class="d-flex justify-content-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+        spreadsheetParamsContainer.innerHTML = '<div class="d-flex justify-content-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+        
+        // Fetch case parameters
+        fetch(`/sampling/parameters/${caseId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to load case parameters');
+                }
+                return response.json();
+            })
+            .then(data => {
+                caseParameters = data;
+                renderParameterSelectors();
+                generateSamplesBtn.disabled = false;
+            })
+            .catch(error => {
+                console.error('Error loading case parameters:', error);
+                streamsParamsContainer.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>${error.message}</div>`;
+                spreadsheetParamsContainer.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>${error.message}</div>`;
+                generateSamplesBtn.disabled = true;
+            });
+    }
+    
+    // Function to render parameter selectors
+    function renderParameterSelectors() {
+        if (!caseParameters.inputs || Object.keys(caseParameters.inputs).length === 0) {
+            streamsParamsContainer.innerHTML = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>No input parameters available for this case.</div>';
+            spreadsheetParamsContainer.innerHTML = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>No input parameters available for this case.</div>';
+            return;
+        }
+        
+        // Separate parameters into streams and spreadsheet
+        const streamParams = {};
+        const spreadsheetParams = {};
+        
+        Object.entries(caseParameters.inputs).forEach(([paramType, params]) => {
+            if (paramType === 'MaterialStream' || paramType === 'EnergyStream') {
+                streamParams[paramType] = params;
+            } else if (paramType === 'Spreadsheet') {
+                spreadsheetParams[paramType] = params;
+            }
+        });
+        
+        // Render stream parameters
+        renderStreamParameters(streamParams);
+        
+        // Render spreadsheet parameters
+        renderSpreadsheetParameters(spreadsheetParams);
+        
+        // Update distribution options based on current sampling method
+        updateDistributionOptions();
+    }
+    
+    // Function to render stream parameters
+    function renderStreamParameters(streamParams) {
+        if (Object.keys(streamParams).length === 0) {
+            streamsParamsContainer.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>No stream parameters available for this case.</div>';
+            return;
+        }
+        
+        let streamHtml = '<div class="mb-3"><div class="form-check">';
+        streamHtml += '<input class="form-check-input" type="checkbox" id="selectAllStreams">';
+        streamHtml += '<label class="form-check-label" for="selectAllStreams"><strong>Select All</strong></label>';
+        streamHtml += '</div></div>';
+        
+        streamHtml += '<div class="input-group mb-3">';
+        streamHtml += '<input type="text" class="form-control" placeholder="Search parameters..." id="streamParamSearch">';
+        streamHtml += '<button class="btn btn-outline-secondary" type="button" id="clearStreamSearch"><i class="bi bi-x"></i></button>';
+        streamHtml += '</div>';
+        
+        streamHtml += '<div class="parameter-list" style="max-height: 400px; overflow-y: auto;">';
+        
+        // Render parameters by type
+        Object.entries(streamParams).forEach(([paramType, params]) => {
+            streamHtml += `<h6 class="mt-3 mb-2">${paramType}</h6>`;
+            
+            // Start a table for better alignment
+            streamHtml += `
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th style="width: 30%">Parameter</th>
+                            <th style="width: 25%">Min</th>
+                            <th style="width: 25%">Max</th>
+                            <th style="width: 20%">Distribution</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            Object.entries(params).forEach(([paramName, paramConfig]) => {
+                const paramId = `stream_${paramName.replace(/\s+/g, '_')}`;
+                
+                // Check if this is a component-based parameter
+                const isComponentParam = paramType === 'MaterialStream' && 
+                                        paramConfig.ParameterType && 
+                                        paramConfig.ParameterType !== 'Property';
+                
+                if (isComponentParam) {
+                    // For component parameters, use a different layout
+                    streamHtml += `
+                        <tr>
+                            <td>
+                                <div class="form-check">
+                                    <input class="form-check-input input-param-checkbox stream-param-checkbox" type="checkbox" id="${paramId}" value="${paramName}" data-is-component="true">
+                                    <label class="form-check-label" for="${paramId}">${paramName}</label>
+                                </div>
+                            </td>
+                            <td colspan="3">
+                                <button type="button" class="btn btn-sm btn-outline-primary configure-component-btn w-100" data-param-name="${paramName}" data-param-type="${paramConfig.ParameterType}" data-stream-name="${paramConfig.StreamName}" disabled>
+                                    <i class="bi bi-gear-fill me-1"></i> Configure Components
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                } else {
+                    // For regular parameters, show min/max inputs and distribution selector for Monte Carlo
+                    streamHtml += `
+                        <tr>
+                            <td>
+                                <div class="form-check">
+                                    <input class="form-check-input input-param-checkbox stream-param-checkbox" type="checkbox" id="${paramId}" value="${paramName}" data-is-component="false">
+                                    <label class="form-check-label" for="${paramId}">${paramName}</label>
+                                </div>
+                            </td>
+                            <td>
+                                <input type="number" class="form-control form-control-sm param-min" id="${paramId}_min" placeholder="Min" disabled>
+                            </td>
+                            <td>
+                                <input type="number" class="form-control form-control-sm param-max" id="${paramId}_max" placeholder="Max" disabled>
+                            </td>
+                            <td>
+                                <select class="form-control form-control-sm param-distribution" id="${paramId}_dist" disabled style="display: none;">
+                                    <option value="uniform">Uniform</option>
+                                    <option value="normal">Normal</option>
+                                    <option value="lognormal">Log-Normal</option>
+                                    <option value="triangular">Triangular</option>
+                                    <option value="exponential">Exponential</option>
+                                </select>
+                            </td>
+                        </tr>
+                    `;
+                }
+            });
+            
+            // End the table
+            streamHtml += `
+                    </tbody>
+                </table>
+            `;
+        });
+        
+        streamHtml += '</div>';
+        streamsParamsContainer.innerHTML = streamHtml;
+        
+        // Add event listeners for stream parameter checkboxes
+        document.querySelectorAll('.stream-param-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const paramName = this.value;
+                const isComponent = this.getAttribute('data-is-component') === 'true';
+                const minInput = document.getElementById(`${this.id}_min`);
+                const maxInput = document.getElementById(`${this.id}_max`);
+                const distSelect = document.getElementById(`${this.id}_dist`);
+                const configureBtn = this.closest('tr').querySelector('.configure-component-btn');
+                
+                if (this.checked) {
+                    // Add to selected parameters
+                    if (!selectedInputParams.includes(paramName)) {
+                        selectedInputParams.push(paramName);
+                    }
+                    
+                    // Enable min/max inputs or configure button
+                    if (isComponent && configureBtn) {
+                        configureBtn.disabled = false;
+                    } else {
+                        if (minInput && maxInput) {
+                            minInput.disabled = false;
+                            maxInput.disabled = false;
+                        }
+                        if (distSelect) {
+                            distSelect.disabled = false;
+                            // Show distribution selector only for Monte Carlo
+                            if (samplingMethod.value === 'montecarlo') {
+                                distSelect.style.display = '';
+                            }
+                        }
+                    }
+                } else {
+                    // Remove from selected parameters
+                    selectedInputParams = selectedInputParams.filter(p => p !== paramName);
+                    
+                    // Disable min/max inputs or configure button
+                    if (isComponent && configureBtn) {
+                        configureBtn.disabled = true;
+                    } else {
+                        if (minInput && maxInput) {
+                            minInput.disabled = true;
+                            maxInput.disabled = true;
+                        }
+                        if (distSelect) {
+                            distSelect.disabled = true;
+                        }
+                    }
+                }
+            });
+        });
+        
+        // Add event listener for select all checkbox
+        const selectAllStreams = document.getElementById('selectAllStreams');
+        if (selectAllStreams) {
+            selectAllStreams.addEventListener('change', function() {
+                document.querySelectorAll('.stream-param-checkbox').forEach(checkbox => {
+                    checkbox.checked = this.checked;
+                    checkbox.dispatchEvent(new Event('change'));
+                });
+            });
+        }
+        
+        // Add event listener for search
+        const streamParamSearch = document.getElementById('streamParamSearch');
+        const clearStreamSearch = document.getElementById('clearStreamSearch');
+        
+        if (streamParamSearch) {
+            streamParamSearch.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase();
+                document.querySelectorAll('#streamsParamsContainer .parameter-list table tbody tr').forEach(row => {
+                    const paramName = row.querySelector('.form-check-label').textContent.toLowerCase();
+                    if (paramName.includes(searchTerm)) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            });
+        }
+        
+        if (clearStreamSearch) {
+            clearStreamSearch.addEventListener('click', function() {
+                streamParamSearch.value = '';
+                document.querySelectorAll('#streamsParamsContainer .parameter-list table tbody tr').forEach(row => {
+                    row.style.display = '';
+                });
+            });
+        }
+        
+        // Add event listeners for component parameter configuration buttons
+        document.querySelectorAll('#streamsParamsContainer .configure-component-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const paramName = this.getAttribute('data-param-name');
+                const paramType = this.getAttribute('data-param-type');
+                const streamName = this.getAttribute('data-stream-name');
+                
+                openComponentModal(paramName, paramType, streamName);
+            });
+        });
+    }
+    
+    // Function to render spreadsheet parameters
+    function renderSpreadsheetParameters(spreadsheetParams) {
+        if (Object.keys(spreadsheetParams).length === 0) {
+            spreadsheetParamsContainer.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>No spreadsheet parameters available for this case.</div>';
+            return;
+        }
+        
+        let spreadsheetHtml = '<div class="mb-3"><div class="form-check">';
+        spreadsheetHtml += '<input class="form-check-input" type="checkbox" id="selectAllSpreadsheet">';
+        spreadsheetHtml += '<label class="form-check-label" for="selectAllSpreadsheet"><strong>Select All</strong></label>';
+        spreadsheetHtml += '</div></div>';
+        
+        spreadsheetHtml += '<div class="input-group mb-3">';
+        spreadsheetHtml += '<input type="text" class="form-control" placeholder="Search parameters..." id="spreadsheetParamSearch">';
+        spreadsheetHtml += '<button class="btn btn-outline-secondary" type="button" id="clearSpreadsheetSearch"><i class="bi bi-x"></i></button>';
+        spreadsheetHtml += '</div>';
+        
+        spreadsheetHtml += '<div class="parameter-list" style="max-height: 400px; overflow-y: auto;">';
+        
+        // Render parameters by type
+        Object.entries(spreadsheetParams).forEach(([paramType, params]) => {
+            // Start a table for better alignment
+            spreadsheetHtml += `
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th style="width: 30%">Parameter</th>
+                            <th style="width: 25%">Min</th>
+                            <th style="width: 25%">Max</th>
+                            <th style="width: 20%">Distribution</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            Object.entries(params).forEach(([paramName, paramConfig]) => {
+                const paramId = `spreadsheet_${paramName.replace(/\s+/g, '_')}`;
+                
+                spreadsheetHtml += `
+                    <tr>
+                        <td>
+                            <div class="form-check">
+                                <input class="form-check-input input-param-checkbox spreadsheet-param-checkbox" type="checkbox" id="${paramId}" value="${paramName}" data-is-component="false">
+                                <label class="form-check-label" for="${paramId}">${paramName}</label>
+                            </div>
+                        </td>
+                        <td>
+                            <input type="number" class="form-control form-control-sm param-min" id="${paramId}_min" placeholder="Min" disabled>
+                        </td>
+                        <td>
+                            <input type="number" class="form-control form-control-sm param-max" id="${paramId}_max" placeholder="Max" disabled>
+                        </td>
+                        <td>
+                            <select class="form-control form-control-sm param-distribution" id="${paramId}_dist" disabled style="display: none;">
+                                <option value="uniform">Uniform</option>
+                                <option value="normal">Normal</option>
+                                <option value="lognormal">Log-Normal</option>
+                                <option value="triangular">Triangular</option>
+                                <option value="exponential">Exponential</option>
+                            </select>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            // End the table
+            spreadsheetHtml += `
+                    </tbody>
+                </table>
+            `;
+        });
+        
+        spreadsheetHtml += '</div>';
+        spreadsheetParamsContainer.innerHTML = spreadsheetHtml;
+        
+        // Add event listeners for spreadsheet parameter checkboxes
+        document.querySelectorAll('.spreadsheet-param-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const paramName = this.value;
+                const minInput = document.getElementById(`${this.id}_min`);
+                const maxInput = document.getElementById(`${this.id}_max`);
+                const distSelect = document.getElementById(`${this.id}_dist`);
+                
+                if (this.checked) {
+                    // Add to selected parameters
+                    if (!selectedInputParams.includes(paramName)) {
+                        selectedInputParams.push(paramName);
+                    }
+                    
+                    // Enable min/max inputs
+                    if (minInput && maxInput) {
+                        minInput.disabled = false;
+                        maxInput.disabled = false;
+                    }
+                    
+                    if (distSelect) {
+                        distSelect.disabled = false;
+                        // Show distribution selector only for Monte Carlo
+                        if (samplingMethod.value === 'montecarlo') {
+                            distSelect.style.display = '';
+                        }
+                    }
+                } else {
+                    // Remove from selected parameters
+                    selectedInputParams = selectedInputParams.filter(p => p !== paramName);
+                    
+                    // Disable min/max inputs
+                    if (minInput && maxInput) {
+                        minInput.disabled = true;
+                        maxInput.disabled = true;
+                    }
+                    
+                    if (distSelect) {
+                        distSelect.disabled = true;
+                    }
+                }
+            });
+        });
+        
+        // Add event listener for select all checkbox
+        const selectAllSpreadsheet = document.getElementById('selectAllSpreadsheet');
+        if (selectAllSpreadsheet) {
+            selectAllSpreadsheet.addEventListener('change', function() {
+                document.querySelectorAll('.spreadsheet-param-checkbox').forEach(checkbox => {
+                    checkbox.checked = this.checked;
+                    checkbox.dispatchEvent(new Event('change'));
+                });
+            });
+        }
+        
+        // Add event listener for search
+        const spreadsheetParamSearch = document.getElementById('spreadsheetParamSearch');
+        const clearSpreadsheetSearch = document.getElementById('clearSpreadsheetSearch');
+        
+        if (spreadsheetParamSearch) {
+            spreadsheetParamSearch.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase();
+                document.querySelectorAll('#spreadsheetParamsContainer .parameter-list table tbody tr').forEach(row => {
+                    const paramName = row.querySelector('.form-check-label').textContent.toLowerCase();
+                    if (paramName.includes(searchTerm)) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            });
+        }
+        
+        if (clearSpreadsheetSearch) {
+            clearSpreadsheetSearch.addEventListener('click', function() {
+                spreadsheetParamSearch.value = '';
+                document.querySelectorAll('#spreadsheetParamsContainer .parameter-list table tbody tr').forEach(row => {
+                    row.style.display = '';
+                });
+            });
+        }
+    }
+    
+    // Function to open the component modal
+    function openComponentModal(paramName, paramType, streamName) {
+        // Set modal title and description
+        document.getElementById('componentParamModalLabel').textContent = `Configure ${paramName} Ranges`;
+        
+        let description = `Define sampling ranges for each component of ${streamName} (${paramType}).`;
+        if (paramType === 'MassFrac') {
+            description += ' Note: For mass fractions, the values will be normalized during sampling to ensure they sum to 1.0.';
+        }
+        document.getElementById('componentParamDescription').textContent = description;
+        
+        // Get existing component data or initialize
+        let components = componentData[paramName] || {};
+        
+        // If we don't have component data yet, try to fetch it from the server
+        if (Object.keys(components).length === 0) {
+            // Show loading indicator
+            document.getElementById('componentRangeTableBody').innerHTML = `
+                <tr>
+                    <td colspan="5" class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading components...</p>
+                    </td>
+                </tr>
+            `;
+            
+            // Fetch components from server
+            fetch(`/sampling/components/${caseId}?stream=${streamName}&param_type=${paramType}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to load components');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.components && Object.keys(data.components).length > 0) {
+                        // Initialize component data with ranges
+                        Object.keys(data.components).forEach(component => {
+                            components[component] = {
+                                min: 0,
+                                max: paramType === 'MassFrac' ? 1 : 100,
+                                distribution: 'uniform',
+                                unit: data.unit || ''
+                            };
+                        });
+                        
+                        // Store component data
+                        componentData[paramName] = components;
+                        
+                        // Render component table
+                        renderComponentTable(paramName, components);
+                    } else {
+                        // No components found
+                        document.getElementById('componentRangeTableBody').innerHTML = `
+                            <tr>
+                                <td colspan="5" class="text-center">
+                                    <p class="text-muted">No components found for this parameter.</p>
+                                    <button type="button" class="btn btn-sm btn-primary" id="addComponentBtn">
+                                        <i class="bi bi-plus-circle me-1"></i> Add Component
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                        
+                        // Add event listener for add component button
+                        document.getElementById('addComponentBtn').addEventListener('click', function() {
+                            addNewComponent(paramName);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading components:', error);
+                    document.getElementById('componentRangeTableBody').innerHTML = `
+                        <tr>
+                            <td colspan="5" class="text-center text-danger">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                ${error.message}
+                            </td>
+                        </tr>
+                    `;
+                });
+        } else {
+            // We already have component data, just render it
+            renderComponentTable(paramName, components);
+        }
+        
+        // Store the current parameter name as a data attribute on the save button
+        document.getElementById('saveComponentRangesBtn').setAttribute('data-param-name', paramName);
+        document.getElementById('saveComponentRangesBtn').setAttribute('data-param-type', paramType);
+        
+        // Show the modal
+        componentParamModal.show();
+    }
+    
+    // Function to render the component table
+    function renderComponentTable(paramName, components) {
+        const tableBody = document.getElementById('componentRangeTableBody');
+        tableBody.innerHTML = '';
+        
+        if (Object.keys(components).length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="text-center">
+                        <p class="text-muted">No components defined yet.</p>
+                        <button type="button" class="btn btn-sm btn-primary" id="addComponentBtn">
+                            <i class="bi bi-plus-circle me-1"></i> Add Component
+                        </button>
+                    </td>
+                </tr>
+            `;
+            
+            // Add event listener for add component button
+            document.getElementById('addComponentBtn').addEventListener('click', function() {
+                addNewComponent(paramName);
+            });
+            
+            return;
+        }
+        
+        // Add rows for each component
+        Object.entries(components).forEach(([component, config]) => {
+            const row = document.createElement('tr');
+            
+            // Get values with defaults
+            const min = config.min !== undefined ? config.min : 0;
+            const max = config.max !== undefined ? config.max : 100;
+            const distribution = config.distribution || 'uniform';
+            const unit = config.unit || '';
+            
+            row.innerHTML = `
+                <td>${component}</td>
+                <td>
+                    <input type="number" class="form-control form-control-sm component-min" 
+                        data-component="${component}" value="${min}" step="0.001">
+                </td>
+                <td>
+                    <input type="number" class="form-control form-control-sm component-max" 
+                        data-component="${component}" value="${max}" step="0.001">
+                </td>
+                <td>
+                    <select class="form-select form-select-sm component-distribution" data-component="${component}" 
+                        ${samplingMethod.value !== 'montecarlo' ? 'disabled' : ''}>
+                        <option value="uniform" ${distribution === 'uniform' ? 'selected' : ''}>Uniform</option>
+                        <option value="normal" ${distribution === 'normal' ? 'selected' : ''}>Normal</option>
+                        <option value="lognormal" ${distribution === 'lognormal' ? 'selected' : ''}>Log-Normal</option>
+                        <option value="triangular" ${distribution === 'triangular' ? 'selected' : ''}>Triangular</option>
+                        <option value="exponential" ${distribution === 'exponential' ? 'selected' : ''}>Exponential</option>
+                    </select>
+                </td>
+                <td>${unit}</td>
+            `;
+            
+            tableBody.appendChild(row);
+        });
+        
+        // Add a row for adding new components
+        const addRow = document.createElement('tr');
+        addRow.innerHTML = `
+            <td colspan="5" class="text-center">
+                <button type="button" class="btn btn-sm btn-outline-primary" id="addComponentBtn">
+                    <i class="bi bi-plus-circle me-1"></i> Add Component
+                </button>
+            </td>
+        `;
+        tableBody.appendChild(addRow);
+        
+        // Add event listener for add component button
+        document.getElementById('addComponentBtn').addEventListener('click', function() {
+            addNewComponent(paramName);
+        });
+    }
+    
+    // Function to add a new component
+    function addNewComponent(paramName) {
+        // Create a prompt for the component name
+        const componentName = prompt('Enter component name:');
+        
+        // Validate component name
+        if (!componentName || componentName.trim() === '') {
+            return;
+        }
+        
+        // Get existing components
+        let components = componentData[paramName] || {};
+        
+        // Check if component already exists
+        if (components[componentName]) {
+            alert(`Component "${componentName}" already exists.`);
+            return;
+        }
+        
+        // Add the new component with default values
+        components[componentName] = {
+            min: 0,
+            max: 1,
+            distribution: 'uniform',
+            unit: ''
+        };
+        
+        // Update component data
+        componentData[paramName] = components;
+        
+        // Re-render the component table
+        renderComponentTable(paramName, components);
+    }
+    
+    // Function to save component ranges
+    function saveComponentRanges() {
+        const paramName = document.getElementById('saveComponentRangesBtn').getAttribute('data-param-name');
+        const paramType = document.getElementById('saveComponentRangesBtn').getAttribute('data-param-type');
+        
+        // Get existing component data
+        let components = componentData[paramName] || {};
+        
+        // Update with values from the form
+        document.querySelectorAll('#componentRangeTableBody tr').forEach(row => {
+            const componentCell = row.querySelector('td:first-child');
+            if (!componentCell) return;
+            
+            const component = componentCell.textContent;
+            const minInput = row.querySelector('.component-min');
+            const maxInput = row.querySelector('.component-max');
+            const distributionSelect = row.querySelector('.component-distribution');
+            
+            if (minInput && maxInput && distributionSelect) {
+                components[component] = {
+                    min: parseFloat(minInput.value),
+                    max: parseFloat(maxInput.value),
+                    distribution: distributionSelect.value,
+                    unit: components[component]?.unit || ''
+                };
+            }
+        });
+        
+        // Store updated component data
+        componentData[paramName] = components;
+        
+        // Update parameter ranges
+        paramRanges[paramName] = {
+            type: 'component',
+            components: components
+        };
+        
+        // Close the modal
+        componentParamModal.hide();
+        
+        // Update the button to show it has data
+        const button = document.querySelector(`.configure-component-btn[data-param-name="${paramName}"]`);
+        if (button) {
+            button.classList.remove('btn-outline-primary');
+            button.classList.add('btn-success');
+            
+            // Add a badge showing the number of components
+            const componentCount = Object.keys(components).length;
+            const badgeSpan = document.createElement('span');
+            badgeSpan.className = 'badge bg-light text-dark ms-2';
+            badgeSpan.textContent = `${componentCount} components`;
+            
+            // Remove any existing badge
+            const existingBadge = button.querySelector('.badge');
+            if (existingBadge) {
+                button.removeChild(existingBadge);
+            }
+            
+            button.appendChild(badgeSpan);
+        }
+    }
+    
+    // Function to generate samples
+    function generateSamples() {
+        // Validate form
+        if (!caseId) {
+            alert('Please select a case.');
+            return;
+        }
+        
+        if (selectedInputParams.length === 0) {
+            alert('Please select at least one input parameter.');
+            return;
+        }
+        
+        // Collect parameter ranges for regular parameters
+        document.querySelectorAll('.input-param-checkbox:checked').forEach(checkbox => {
+            const paramName = checkbox.value;
+            const isComponent = checkbox.getAttribute('data-is-component') === 'true';
+            
+            // Skip component parameters as they are handled separately
+            if (isComponent) return;
+            
+            const minInput = document.getElementById(`${checkbox.id}_min`);
+            const maxInput = document.getElementById(`${checkbox.id}_max`);
+            const distSelect = document.getElementById(`${checkbox.id}_dist`);
+            
+            if (minInput && maxInput) {
+                const min = parseFloat(minInput.value);
+                const max = parseFloat(maxInput.value);
+                
+                if (isNaN(min) || isNaN(max)) {
+                    alert(`Please enter valid min/max values for ${paramName}.`);
+                    return;
+                }
+                
+                if (min >= max) {
+                    alert(`Min value must be less than max value for ${paramName}.`);
+                    return;
+                }
+                
+                // For Monte Carlo, get the distribution type
+                let distribution = 'uniform'; // Default
+                if (samplingMethod.value === 'montecarlo' && distSelect) {
+                    distribution = distSelect.value;
+                }
+                
+                paramRanges[paramName] = {
+                    type: 'scalar',
+                    min: min,
+                    max: max,
+                    distribution: distribution
+                };
+                
+                // For normal distribution, interpret min/max as mean/std
+                if (distribution === 'normal' || distribution === 'lognormal') {
+                    paramRanges[paramName].mean = min;
+                    paramRanges[paramName].std = max;
+                }
+                
+                // For triangular, we need a mode (peak) value
+                if (distribution === 'triangular') {
+                    // Default to the middle value
+                    paramRanges[paramName].mode = (min + max) / 2;
+                }
+                
+                // For exponential, we need a scale parameter
+                if (distribution === 'exponential') {
+                    paramRanges[paramName].scale = max;
+                }
+            }
+        });
+        
+        // Check if we have ranges for all selected parameters
+        for (const paramName of selectedInputParams) {
+            if (!paramRanges[paramName]) {
+                // Check if this is a component parameter
+                const checkbox = document.querySelector(`.input-param-checkbox[value="${paramName}"]`);
+                const isComponent = checkbox && checkbox.getAttribute('data-is-component') === 'true';
+                
+                if (isComponent) {
+                    alert(`Please configure component ranges for ${paramName}.`);
+                } else {
+                    alert(`Please enter min/max values for ${paramName}.`);
+                }
+                return;
+            }
+        }
+        
+        // Disable the generate button and show loading state
+        generateSamplesBtn.disabled = true;
+        generateSamplesBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Generating...';
+        
+        // Prepare request data
+        const requestData = {
+            case_id: caseId,
+            method: samplingMethod.value,
+            num_samples: parseInt(numSamples.value),
+            input_params: selectedInputParams,
+            output_params: [], // Empty array since we're collecting all outputs automatically
+            param_ranges: paramRanges
+        };
+        
+        // Send request to generate samples
+        fetch('/sampling/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to generate samples');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Store sampling data
+            samplingData = data;
+            
+            // Display results
+            displaySamplingResults(data);
+            
+            // Re-enable generate button
+            generateSamplesBtn.disabled = false;
+            generateSamplesBtn.innerHTML = '<i class="bi bi-grid-3x3"></i> Generate Samples';
+            
+            // Show results section
+            samplingResultsSection.style.display = 'block';
+            
+            // Scroll to results
+            samplingResultsSection.scrollIntoView({ behavior: 'smooth' });
+            
+            // Initialize visualizations
+            initializeVisualizations();
+            
+            // Calculate and display statistics
+            calculateStatistics();
+        })
+        .catch(error => {
+            console.error('Error generating samples:', error);
+            alert(`Error: ${error.message}`);
+            
+            // Re-enable generate button
+            generateSamplesBtn.disabled = false;
+            generateSamplesBtn.innerHTML = '<i class="bi bi-grid-3x3"></i> Generate Samples';
+        });
+    }
+    
+    // Function to display sampling results with pagination
+    function displaySamplingResults(data) {
+        if (!data || !data.samples || data.samples.length === 0) {
+            samplingDataTable.innerHTML = '<tr><td colspan="100%" class="text-center">No samples generated.</td></tr>';
+            return;
+        }
+        
+        // Get all parameter names
+        const paramNames = Object.keys(data.samples[0]);
+        
+        // Create table header
+        const thead = samplingDataTable.querySelector('thead');
+        const headerRow = thead.querySelector('tr');
+        headerRow.innerHTML = '<th>#</th>';
+        
+        paramNames.forEach(param => {
+            headerRow.innerHTML += `<th>${param}</th>`;
+        });
+        
+        // Create table body
+        const tbody = samplingDataTable.querySelector('tbody');
+        tbody.innerHTML = '';
+        
+        // Pagination settings
+        const pageSize = 50; // Show 50 rows per page
+        const totalPages = Math.ceil(data.samples.length / pageSize);
+        let currentPage = 1;
+        
+        // Function to render a specific page
+        function renderPage(page) {
+            tbody.innerHTML = '';
+            const startIdx = (page - 1) * pageSize;
+            const endIdx = Math.min(startIdx + pageSize, data.samples.length);
+            
+            for (let i = startIdx; i < endIdx; i++) {
+                const sample = data.samples[i];
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>${i + 1}</td>`;
+                
+                paramNames.forEach(param => {
+                    const value = sample[param];
+                    row.innerHTML += `<td>${typeof value === 'number' ? value.toFixed(4) : value}</td>`;
+                });
+                
+                tbody.appendChild(row);
+            }
+            
+            // Update pagination UI
+            updatePaginationControls(page, totalPages);
+        }
+        
+        // Function to update pagination controls
+        function updatePaginationControls(page, totalPages) {
+            const paginationContainer = document.getElementById('samplingPagination');
+            if (!paginationContainer) return;
+            
+            let paginationHtml = `
+                <nav aria-label="Sampling results pagination">
+                    <ul class="pagination justify-content-center">
+                        <li class="page-item ${page === 1 ? 'disabled' : ''}">
+                            <a class="page-link" href="#" data-page="${page - 1}" aria-label="Previous">
+                                <span aria-hidden="true">&laquo;</span>
+                            </a>
+                        </li>
+            `;
+            
+            // Show limited number of page links
+            const maxVisiblePages = 5;
+            let startPage = Math.max(1, page - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+            
+            if (endPage - startPage + 1 < maxVisiblePages) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+            
+            if (startPage > 1) {
+                paginationHtml += `
+                    <li class="page-item">
+                        <a class="page-link" href="#" data-page="1">1</a>
+                    </li>
+                `;
+                if (startPage > 2) {
+                    paginationHtml += `
+                        <li class="page-item disabled">
+                            <a class="page-link" href="#">...</a>
+                        </li>
+                    `;
+                }
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                paginationHtml += `
+                    <li class="page-item ${i === page ? 'active' : ''}">
+                        <a class="page-link" href="#" data-page="${i}">${i}</a>
+                    </li>
+                `;
+            }
+            
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    paginationHtml += `
+                        <li class="page-item disabled">
+                            <a class="page-link" href="#">...</a>
+                        </li>
+                    `;
+                }
+                paginationHtml += `
+                    <li class="page-item">
+                        <a class="page-link" href="#" data-page="${totalPages}">${totalPages}</a>
+                    </li>
+                `;
+            }
+            
+            paginationHtml += `
+                        <li class="page-item ${page === totalPages ? 'disabled' : ''}">
+                            <a class="page-link" href="#" data-page="${page + 1}" aria-label="Next">
+                                <span aria-hidden="true">&raquo;</span>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+                <div class="text-center text-muted">
+                    Showing ${(page - 1) * pageSize + 1} to ${Math.min(page * pageSize, data.samples.length)} of ${data.samples.length} samples
+                </div>
+            `;
+            
+            paginationContainer.innerHTML = paginationHtml;
+            
+            // Add event listeners to pagination links
+            paginationContainer.querySelectorAll('.page-link').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const pageNum = parseInt(this.getAttribute('data-page'));
+                    if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                        currentPage = pageNum;
+                        renderPage(currentPage);
+                    }
+                });
+            });
+        }
+        
+        // Add pagination container to the DOM
+        const paginationContainer = document.createElement('div');
+        paginationContainer.id = 'samplingPagination';
+        paginationContainer.className = 'mt-3';
+        samplingDataTable.parentNode.parentNode.appendChild(paginationContainer);
+        
+        // Render the first page
+        renderPage(currentPage);
+        
+        // Add sample count information
+        const sampleCountInfo = document.createElement('div');
+        sampleCountInfo.className = 'alert alert-info mt-3';
+        
+        // Add specific information for Monte Carlo sampling
+        if (data.method === 'montecarlo') {
+            sampleCountInfo.innerHTML = `
+                <i class="bi bi-info-circle me-2"></i>
+                Generated ${data.samples.length} samples using Monte Carlo sampling with specified probability distributions.
+            `;
+        } else {
+            sampleCountInfo.innerHTML = `
+                <i class="bi bi-info-circle me-2"></i>
+                Generated ${data.samples.length} samples using ${data.method.toUpperCase()} sampling method.
+            `;
+        }
+        
+        samplingDataTable.parentNode.parentNode.insertBefore(sampleCountInfo, samplingDataTable.parentNode);
+    }
+    
+    // Function to initialize visualizations
+    function initializeVisualizations() {
+        if (!samplingData || !samplingData.samples || samplingData.samples.length === 0) {
+            return;
+        }
+        
+        // Get all parameter names
+        const paramNames = Object.keys(samplingData.samples[0]);
+        
+        // Populate parameter dropdowns for visualizations
+        const normalParamSelect = document.getElementById('normalParam');
+        const histParamSelect = document.getElementById('histParam');
+        const boxParamSelect = document.getElementById('boxParam');
+        
+        // Clear existing options
+        normalParamSelect.innerHTML = '';
+        histParamSelect.innerHTML = '';
+        boxParamSelect.innerHTML = '';
+        
+        // Add options for each parameter
+        paramNames.forEach(param => {
+            normalParamSelect.innerHTML += `<option value="${param}">${param}</option>`;
+            histParamSelect.innerHTML += `<option value="${param}">${param}</option>`;
+            boxParamSelect.innerHTML += `<option value="${param}">${param}</option>`;
+        });
+        
+        // Set default selections
+        if (paramNames.length >= 1) {
+            normalParamSelect.value = paramNames[0];
+            histParamSelect.value = paramNames[0];
+            boxParamSelect.value = paramNames[0];
+        }
+        
+        // Make sure histogram options are shown by default
+        document.getElementById('normalPlotOptions').style.display = 'none';
+        document.getElementById('histogramOptions').style.display = 'block';
+        document.getElementById('boxplotOptions').style.display = 'none';
+        
+        // Create initial plot
+        updatePlot();
+    }  
+    // Function to update plot options based on plot type
+    function updatePlotOptions() {
+        const plotType = document.getElementById('plotType').value;
+        
+        // Hide all option divs
+        document.getElementById('normalPlotOptions').style.display = 'none';
+        document.getElementById('histogramOptions').style.display = 'none';
+        document.getElementById('boxplotOptions').style.display = 'none';
+        
+        // Show options for selected plot type
+        if (plotType === 'normal') {
+            document.getElementById('normalPlotOptions').style.display = 'block';
+        } else if (plotType === 'histogram') {
+            document.getElementById('histogramOptions').style.display = 'block';
+        } else if (plotType === 'boxplot') {
+            document.getElementById('boxplotOptions').style.display = 'block';
+        }
+    }
+    
+    // Function to update the plot
+    function updatePlot() {
+        if (!samplingData || !samplingData.samples || samplingData.samples.length === 0) {
+            return;
+        }
+        
+        const plotType = document.getElementById('plotType').value;
+        const plotContainer = document.getElementById('plotContainer');
+        
+        // Extract data from samples
+        const samples = samplingData.samples;
+        
+        // Create plot based on type
+        if (plotType === 'normal') {
+            const param = document.getElementById('normalParam').value;
+            
+            // Get values for the selected parameter
+            const values = samples.map(sample => sample[param]);
+            
+            // Create x-axis as point IDs (1-based indices)
+            const pointIds = Array.from({length: values.length}, (_, i) => i + 1);
+            
+            const trace = {
+                x: pointIds,
+                y: values,
+                mode: 'lines+markers',
+                type: 'scatter',
+                name: param,
+                marker: {
+                    size: 6,
+                    color: 'rgba(0, 123, 255, 0.7)',
+                    line: {
+                        color: 'rgba(0, 123, 255, 1.0)',
+                        width: 1
+                    }
+                },
+                line: {
+                    color: 'rgba(0, 123, 255, 0.5)',
+                    width: 1
+                }
+            };
+            
+            const layout = {
+                title: `Normal Plot: ${param} vs Sample ID`,
+                xaxis: {
+                    title: 'Sample ID',
+                    tickmode: 'auto',
+                    nticks: Math.min(20, values.length)
+                },
+                yaxis: {
+                    title: param
+                },
+                hovermode: 'closest'
+            };
+            
+            Plotly.newPlot(plotContainer, [trace], layout);
+            
+        } else if (plotType === 'histogram') {
+            const param = document.getElementById('histParam').value;
+            const binCount = parseInt(document.getElementById('binCount').value);
+            
+            const values = samples.map(sample => sample[param]);
+            
+            const trace = {
+                x: values,
+                type: 'histogram',
+                nbinsx: binCount,
+                marker: {
+                    color: 'rgba(0, 123, 255, 0.7)',
+                    line: {
+                        color: 'rgba(0, 123, 255, 1.0)',
+                        width: 1
+                    }
+                }
+            };
+            
+            const layout = {
+                title: `Histogram: ${param}`,
+                xaxis: {
+                    title: param
+                },
+                yaxis: {
+                    title: 'Frequency'
+                }
+            };
+            
+            Plotly.newPlot(plotContainer, [trace], layout);
+            
+        } else if (plotType === 'boxplot') {
+            const param = document.getElementById('boxParam').value;
+            
+            const values = samples.map(sample => sample[param]);
+            
+            const trace = {
+                y: values,
+                type: 'box',
+                name: param,
+                boxpoints: 'all',
+                jitter: 0.3,
+                pointpos: 0,
+                marker: {
+                    color: 'rgba(0, 123, 255, 0.7)'
+                }
+            };
+            
+            const layout = {
+                title: `Box Plot: ${param}`,
+                yaxis: {
+                    title: param
+                }
+            };
+            
+            Plotly.newPlot(plotContainer, [trace], layout);
+            
+        } else if (plotType === 'heatmap') {
+            // Get all parameter names
+            const paramNames = Object.keys(samples[0]);
+            
+            // Calculate correlation matrix
+            const correlationMatrix = calculateCorrelationMatrix(samples, paramNames);
+            
+            const trace = {
+                z: correlationMatrix,
+                x: paramNames,
+                y: paramNames,
+                type: 'heatmap',
+                colorscale: 'Viridis',
+                zmin: -1,
+                zmax: 1
+            };
+            
+            const layout = {
+                title: 'Correlation Heatmap',
+                xaxis: {
+                    ticks: '',
+                    side: 'top'
+                },
+                yaxis: {
+                    ticks: '',
+                    ticksuffix: ' '
+                }
+            };
+            
+            Plotly.newPlot(plotContainer, [trace], layout);
+            
+        } else if (plotType === 'parallel') {
+            // Get all parameter names
+            const paramNames = Object.keys(samples[0]);
+            
+            // Prepare data for parallel coordinates
+            const dimensions = paramNames.map(param => {
+                const values = samples.map(sample => sample[param]);
+                return {
+                    label: param,
+                    values: values
+                };
+            });
+            
+            const trace = {
+                type: 'parcoords',
+                line: {
+                    color: 'rgba(0, 123, 255, 0.7)'
+                },
+                dimensions: dimensions
+            };
+            
+            const layout = {
+                title: 'Parallel Coordinates Plot'
+            };
+            
+            Plotly.newPlot(plotContainer, [trace], layout);
+        }
+    }
+    
+    // Function to calculate correlation matrix
+    function calculateCorrelationMatrix(samples, paramNames) {
+        const n = paramNames.length;
+        const matrix = Array(n).fill().map(() => Array(n).fill(0));
+        
+        // Extract data arrays for each parameter
+        const paramArrays = {};
+        paramNames.forEach(param => {
+            paramArrays[param] = samples.map(sample => sample[param]);
+        });
+        
+        // Calculate correlation for each pair of parameters
+        for (let i = 0; i < n; i++) {
+            for (let j = 0; j < n; j++) {
+                const param1 = paramNames[i];
+                const param2 = paramNames[j];
+                
+                if (i === j) {
+                    matrix[i][j] = 1; // Correlation with self is 1
+                } else {
+                    matrix[i][j] = calculateCorrelation(paramArrays[param1], paramArrays[param2]);
+                }
+            }
+        }
+        
+        return matrix;
+    }
+    
+    // Function to calculate correlation between two arrays
+    function calculateCorrelation(x, y) {
+        const n = x.length;
+        
+        // Calculate means
+        const xMean = x.reduce((sum, val) => sum + val, 0) / n;
+        const yMean = y.reduce((sum, val) => sum + val, 0) / n;
+        
+        // Calculate covariance and variances
+        let covariance = 0;
+        let xVariance = 0;
+        let yVariance = 0;
+        
+        for (let i = 0; i < n; i++) {
+            const xDiff = x[i] - xMean;
+            const yDiff = y[i] - yMean;
+            
+            covariance += xDiff * yDiff;
+            xVariance += xDiff * xDiff;
+            yVariance += yDiff * yDiff;
+        }
+        
+        // Calculate correlation coefficient
+        if (xVariance === 0 || yVariance === 0) {
+            return 0; // Avoid division by zero
+        }
+        
+        return covariance / Math.sqrt(xVariance * yVariance);
+    }
+    
+    // Function to calculate statistics
+    function calculateStatistics() {
+        if (!samplingData || !samplingData.samples || samplingData.samples.length === 0) {
+            return;
+        }
+        
+        const samples = samplingData.samples;
+        const paramNames = Object.keys(samples[0]);
+        
+        const statisticsTable = document.getElementById('statisticsTable').querySelector('tbody');
+        statisticsTable.innerHTML = '';
+        
+        paramNames.forEach(param => {
+            const values = samples.map(sample => sample[param]);
+            
+            // Calculate statistics
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+            
+            // Sort values for median
+            const sortedValues = [...values].sort((a, b) => a - b);
+            const median = sortedValues.length % 2 === 0 
+                ? (sortedValues[sortedValues.length / 2 - 1] + sortedValues[sortedValues.length / 2]) / 2
+                : sortedValues[Math.floor(sortedValues.length / 2)];
+            
+            // Calculate standard deviation
+            const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+            const stdDev = Math.sqrt(variance);
+            
+            // Add row to table
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${param}</td>
+                <td>${min.toFixed(4)}</td>
+                <td>${max.toFixed(4)}</td>
+                <td>${mean.toFixed(4)}</td>
+                <td>${median.toFixed(4)}</td>
+                <td>${stdDev.toFixed(4)}</td>
+            `;
+            
+            statisticsTable.appendChild(row);
+        });
+        
+        // For Monte Carlo sampling, add distribution information
+        if (samplingMethod.value === 'montecarlo') {
+            // Create a section to show the distributions used
+            const statsSection = document.getElementById('statistics-content');
+            
+            // Check if distribution info already exists
+            let distInfoDiv = document.getElementById('distribution-info');
+            if (!distInfoDiv) {
+                distInfoDiv = document.createElement('div');
+                distInfoDiv.id = 'distribution-info';
+                distInfoDiv.className = 'card mt-4';
+                
+                distInfoDiv.innerHTML = `
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0">Distribution Information</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm" id="distributionTable">
+                                <thead>
+                                    <tr>
+                                        <th>Parameter</th>
+                                        <th>Distribution</th>
+                                        <th>Parameters</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+                
+                statsSection.appendChild(distInfoDiv);
+            }
+            
+            // Populate the distribution table
+            const distTableBody = document.getElementById('distributionTable').querySelector('tbody');
+            distTableBody.innerHTML = '';
+            
+            // Add rows for each parameter
+            Object.entries(paramRanges).forEach(([paramName, config]) => {
+                const row = document.createElement('tr');
+                
+                let distributionInfo = '';
+                let distributionParams = '';
+                
+                if (config.type === 'scalar') {
+                    distributionInfo = config.distribution || 'uniform';
+                    
+                    // Format distribution parameters based on type
+                    if (distributionInfo === 'uniform') {
+                        distributionParams = `min = ${config.min}, max = ${config.max}`;
+                    } else if (distributionInfo === 'normal') {
+                        distributionParams = `mean = ${config.mean}, std = ${config.std}`;
+                    } else if (distributionInfo === 'lognormal') {
+                        distributionParams = `mean = ${config.mean}, std = ${config.std}`;
+                    } else if (distributionInfo === 'triangular') {
+                        distributionParams = `min = ${config.min}, max = ${config.max}, mode = ${config.mode || (config.min + config.max) / 2}`;
+                    } else if (distributionInfo === 'exponential') {
+                        distributionParams = `scale = ${config.scale || config.max}`;
+                    }
+                } else if (config.type === 'component') {
+                    distributionInfo = 'Component-based';
+                    distributionParams = `${Object.keys(config.components).length} components`;
+                }
+                
+                row.innerHTML = `
+                    <td>${paramName}</td>
+                    <td>${distributionInfo}</td>
+                    <td>${distributionParams}</td>
+                `;
+                
+                distTableBody.appendChild(row);
+            });
+        }
+    }
+    
+    // Function to save sampling
+    function saveSampling() {
+        if (!samplingData) {
+            alert('No sampling data to save.');
+            return;
+        }
+        
+        const name = document.getElementById('samplingName').value;
+        const description = document.getElementById('samplingDescription').value;
+        
+        if (!name) {
+            alert('Please enter a name for the sampling.');
+            return;
+        }
+        
+        // Disable the save button
+        const confirmSaveBtn = document.getElementById('confirmSaveBtn');
+        confirmSaveBtn.disabled = true;
+        confirmSaveBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...';
+        
+        // Prepare request data
+        const requestData = {
+            case_id: caseId,
+            name: name,
+            description: description,
+            method: samplingMethod.value,
+            num_samples: parseInt(numSamples.value),
+            input_params: selectedInputParams,
+            output_params: [], // Empty array since we're collecting all outputs automatically
+            param_ranges: paramRanges,
+            samples: samplingData.samples
+        };
+        
+        // Send request to save sampling
+        fetch('/sampling/save', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to save sampling');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Hide the modal
+            saveSamplingModal.hide();
+            
+            // Show success message
+            alert('Sampling saved successfully!');
+            
+            // Re-enable save button
+            confirmSaveBtn.disabled = false;
+            confirmSaveBtn.innerHTML = 'Save';
+            
+            // Redirect to sampling details page
+            if (data.sampling_id) {
+                window.location.href = `/sampling/details/${data.sampling_id}`;
+            }
+        })
+        .catch(error => {
+            console.error('Error saving sampling:', error);
+            alert(`Error: ${error.message}`);
+            
+            // Re-enable save button
+            confirmSaveBtn.disabled = false;
+            confirmSaveBtn.innerHTML = 'Save';
+        });
+    }
+    
+    // Function to download sampling
+    function downloadSampling() {
+        if (!samplingData) {
+            alert('No sampling data to download.');
+            return;
+        }
+        
+        // Disable the download button
+        downloadSamplingBtn.disabled = true;
+        downloadSamplingBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Downloading...';
+        
+        // Prepare request data
+        const requestData = {
+            case_id: caseId,
+            case_name: caseName,
+            method: samplingMethod.value,
+            num_samples: parseInt(numSamples.value),
+            samples: samplingData.samples,
+            param_ranges: paramRanges  // Include distribution information for Monte Carlo
+        };
+        
+        // Send request to download sampling
+        fetch('/sampling/download', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to download sampling');
+            }
+            return response.blob();
+        })
+        .then(blob => {
+            // Create a URL for the blob
+            const url = window.URL.createObjectURL(blob);
+            
+            // Create a link to download the file
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Sampling_${caseName}_${samplingMethod.value}_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`;
+            
+            // Append the link to the document
+            document.body.appendChild(a);
+            
+            // Click the link to trigger the download
+            a.click();
+            
+            // Clean up
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            // Re-enable the download button
+            downloadSamplingBtn.disabled = false;
+            downloadSamplingBtn.innerHTML = '<i class="bi bi-download"></i> Download';
+        })
+        .catch(error => {
+            console.error('Error downloading sampling:', error);
+            alert(`Error: ${error.message}`);
+            
+            // Re-enable the download button
+            downloadSamplingBtn.disabled = false;
+            downloadSamplingBtn.innerHTML = '<i class="bi bi-download"></i> Download';
+        });
+    }
+    
+    // Function to run simulations with the generated samples
+    function runSimulations() {
+        if (!samplingData) {
+            alert('No sampling data to run simulations with.');
+            return;
+        }
+        
+        // Confirm with user
+        if (!confirm(`This will run ${samplingData.samples.length} simulations. This may take a while. Continue?`)) {
+            return;
+        }
+        
+        // Disable the run button
+        runSimulationsBtn.disabled = true;
+        runSimulationsBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Running...';
+        
+        // Prepare request data
+        const requestData = {
+            case_id: caseId,
+            samples: samplingData.samples,
+            flatten_components: false,  // Add the option to flatten components
+            method: samplingMethod.value,  // Include the sampling method
+            param_ranges: paramRanges    // Include distribution information
+        };
+        
+        // Send request to run simulations
+        fetch('/sampling/run_simulations', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to run simulations');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Show success message
+            alert(`Simulations completed: ${data.completed}/${data.total}`);
+            
+            // Re-enable run button
+            runSimulationsBtn.disabled = false;
+            runSimulationsBtn.innerHTML = '<i class="bi bi-play-fill"></i> Run Simulations';
+            
+            // Redirect to results page if available
+            if (data.result_id) {
+                window.location.href = `/simulations/batch_results/${data.result_id}`;
+            }
+        })
+        .catch(error => {
+            console.error('Error running simulations:', error);
+            alert(`Error: ${error.message}`);
+            
+            // Re-enable run button
+            runSimulationsBtn.disabled = false;
+            runSimulationsBtn.innerHTML = '<i class="bi bi-play-fill"></i> Run Simulations';
+        });
+    }
+    
+    // Initialize the page
+    updateDistributionOptions();
+});
+</script>
+
+{% endblock %}

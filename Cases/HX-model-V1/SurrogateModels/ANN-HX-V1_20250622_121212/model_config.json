@@ -1,0 +1,35 @@
+{
+    "model_type": "neural_network",
+    "input_params": [
+        "E1FOULING",
+        "E2FOULING",
+        "FEED1MASSFLOW",
+        "FEED1TEMP",
+        "PROD1MASSFLOW",
+        "PROD1TEMP"
+    ],
+    "output_params": [
+        "FEED1E1OUT",
+        "FEED1OUT",
+        "PROD1E1IN",
+        "PROD1OUT"
+    ],
+    "is_inverse_model": false,
+    "training_data_source": "batch_results",
+    "test_size": 0.2,
+    "random_seed": 42,
+    "model_params": {
+        "hidden_layer_sizes": [
+            100
+        ],
+        "activation": "relu",
+        "solver": "adam",
+        "alpha": 0.0001,
+        "batch_size": "auto",
+        "learning_rate": "adaptive",
+        "learning_rate_init": 0.001,
+        "max_iter": 200,
+        "random_state": 42,
+        "test_size": 0.2
+    }
+}

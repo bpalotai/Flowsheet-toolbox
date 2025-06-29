@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}New Case | Simulation Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Create New Case</h1>
+    <a href="{{ url_for('cases.list_cases') }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Cases
+    </a>
+</div>
+
+{% for message in get_flashed_messages(with_categories=true) %}
+<div class="alert alert-{{ message[0] }} alert-dismissible fade show" role="alert">
+    {{ message[1] }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endfor %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label for="name" class="form-label">Case Name <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="name" name="name" required>
+                <div class="form-text">A unique name for your simulation case.</div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="description" class="form-label">Description</label>
+                <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                <div class="form-text">Optional description of the case purpose.</div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="driver_type" class="form-label">Simulation Driver <span class="text-danger">*</span></label>
+                <select class="form-select" id="driver_type" name="driver_type" required>
+                    <option value="hysys" selected>HYSYS</option>
+                    <option value="custom">Custom</option>
+                </select>
+                <div class="form-text">Select the simulation software driver to use.</div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="simulation_file" class="form-label">Simulation File</label>
+                <input type="file" class="form-control" id="simulation_file" name="simulation_file">
+                <div class="form-text">Upload the simulation model file (.hsc, .hysys, .bkp).</div>
+            </div>
+            
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save"></i> Create Case
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

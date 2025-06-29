@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+
+{% block title %}{{ case.name }} | Simulation Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>{{ case.name }}</h1>
+    <div class="btn-group" role="group">
+        <a href="{{ url_for('cases.list_cases') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Cases
+        </a>
+        <a href="{{ url_for('cases.edit_case', case_id=case.id) }}" class="btn btn-primary">
+            <i class="bi bi-pencil"></i> Edit Case
+        </a>
+    </div>
+</div>
+
+{% for message in get_flashed_messages(with_categories=true) %}
+<div class="alert alert-{{ message[0] }} alert-dismissible fade show" role="alert">
+    {{ message[1] }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endfor %}
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="bi bi-info-circle me-2"></i>Case Information</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-4">Description</dt>
+                    <dd class="col-sm-8">{{ case.description or 'No description provided' }}</dd>
+                    
+                    <dt class="col-sm-4">Driver Type</dt>
+                    <dd class="col-sm-8">
+                        <i class="bi bi-cpu me-1"></i> {{ case.driver_type }}
+                    </dd>
+                    
+                    <dt class="col-sm-4">Simulation File</dt>
+                    <dd class="col-sm-8">
+                        {% if case.simulation_file %}
+                            <i class="bi bi-file-earmark-code me-1"></i> {{ case.simulation_file }}
+                        {% else %}
+                            No file attached
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-4">Created</dt>
+                    <dd class="col-sm-8">
+                        <i class="bi bi-calendar3 me-1"></i> {{ case.created_at.strftime('%Y-%m-%d %H:%M') }}
+                    </dd>
+                    
+                    <dt class="col-sm-4">Last Updated</dt>
+                    <dd class="col-sm-8">
+                        {% if case.updated_at %}
+                            <i class="bi bi-arrow-clockwise me-1"></i> {{ case.updated_at.strftime('%Y-%m-%d %H:%M') }}
+                        {% else %}
+                            Never
+                        {% endif %}
+                    </dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="bi bi-lightning me-2"></i>Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-3">
+                    <a href="{{ url_for('parameters.configure_parameters', case_id=case.id) }}" class="btn btn-outline-primary">
+                        <i class="bi bi-gear me-2"></i> Configure Parameters
+                    </a>
+                    <a href="{{ url_for('simulations.run_simulation', case_id=case.id) }}" class="btn btn-success">
+                        <i class="bi bi-play-fill me-2"></i> Run Simulation
+                    </a>
+                    <a href="{{ url_for('simulations.simulation_results', case_id=case.id) }}" class="btn btn-info">
+                        <i class="bi bi-graph-up me-2"></i> View Results
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0"><i class="bi bi-sliders me-2"></i>Parameter Configuration</h5>
+        <a href="{{ url_for('parameters.configure_parameters', case_id=case.id) }}" class="btn btn-sm btn-primary">
+            <i class="bi bi-pencil me-1"></i> Edit Parameters
+        </a>
+    </div>
+    <div class="card-body">
+        {% if case.parameters and (case.parameters.InputParams.Spreadsheet or case.parameters.InputParams.MaterialStream or case.parameters.InputParams.EnergyStream) %}
+        <h6>Input Parameters</h6>
+        <div class="table-responsive mb-4">
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Source</th>
+                        <th>Details</th>
+                        <th>UOM</th> <!-- Added UOM column -->
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for param_type, params in case.parameters.InputParams.items() %}
+                        {% for param_name, param_config in params.items() %}
+                        <tr>
+                            <td>{{ param_name }}</td>
+                            <td>{{ param_type }}</td>
+                            <td>
+                                {% if param_type == 'Spreadsheet' %}
+                                    {{ param_config.SpreadsheetName }}
+                                {% elif param_type in ['MaterialStream', 'EnergyStream'] %}
+                                    {{ param_config.StreamName }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if param_type == 'Spreadsheet' %}
+                                    Cell: {{ param_config.Cell }}
+                                {% elif param_type == 'MaterialStream' %}
+                                    {% if param_config.ParameterType == 'Property' %}
+                                        Property: {{ param_config.PropertyName }}
+                                    {% else %}
+                                        Type: {{ param_config.ParameterType }}
+                                    {% endif %}
+                                {% elif param_type == 'EnergyStream' %}
+                                    Property: {{ param_config.PropertyName }}
+                                {% endif %}
+                                {% if param_config.GetComponents %}
+                                    Components: {{ param_config.GetComponents|join(', ') }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if param_config.UOM %}
+                                    <span class="badge bg-info">{{ param_config.UOM }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <h6>Output Parameters</h6>
+        <div class="table-responsive">
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Source</th>
+                        <th>Details</th>
+                        <th>UOM</th> <!-- Added UOM column -->
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for param_type, params in case.parameters.OutputParameters.items() %}
+                        {% for param_name, param_config in params.items() %}
+                        <tr>
+                            <td>{{ param_name }}</td>
+                            <td>{{ param_type }}</td>
+                            <td>
+                                {% if param_type == 'Spreadsheet' %}
+                                    {{ param_config.SpreadsheetName }}
+                                {% elif param_type in ['MaterialStream', 'EnergyStream'] %}
+                                    {{ param_config.StreamName }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if param_type == 'Spreadsheet' %}
+                                    Cell: {{ param_config.Cell }}
+                                {% elif param_type == 'MaterialStream' %}
+                                    {% if param_config.ParameterType == 'Property' %}
+                                        Property: {{ param_config.PropertyName }}
+                                    {% else %}
+                                        Type: {{ param_config.ParameterType }}
+                                        {% if param_config.GetComponents %}
+                                            Components: {{ param_config.GetComponents|join(', ') }}
+                                        {% endif %}
+                                    {% endif %}
+                                {% elif param_type == 'EnergyStream' %}
+                                    Property: {{ param_config.PropertyName }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if param_config.UOM %}
+                                    <span class="badge bg-info">{{ param_config.UOM }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-warning">
+            <p><i class="bi bi-exclamation-triangle me-2"></i>No parameters configured for this case. <a href="{{ url_for('parameters.configure_parameters', case_id=case.id) }}">Configure parameters</a> to run simulations.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

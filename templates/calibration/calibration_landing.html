@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+
+{% block title %}Parameter Calibration | Simulation Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-sliders text-primary me-2"></i>Parameter Calibration</h1>
+    <div>
+        <a href="{{ url_for('calibration.create_calibration') }}" class="btn btn-success me-2">
+            <i class="bi bi-plus-circle me-2"></i>Create New Calibration
+        </a>
+        <a href="{{ url_for('calibration.batch_calibration') }}" class="btn btn-primary me-2">
+            <i class="bi bi-collection me-2"></i>Batch Calibration
+        </a>
+        <a href="#" class="btn btn-outline-info" onclick="alert('Coming soon!')">
+            <i class="bi bi-arrow-repeat me-2"></i>Online Learning
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Available Calibration Runs</h5>
+    </div>
+    <div class="card-body">
+        {% if calibration_data %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Case</th>
+                        <th>Method</th>
+                        <th>Created</th>
+                        <th>Mean Rel Error</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in calibration_data %}
+                    {% set calibration = item.calibration %}
+                    <tr>
+                        <td>{{ calibration.name or 'Unnamed Calibration' }}</td>
+                        <td>
+                            <a href="{{ url_for('cases.case_detail', case_id=calibration.case_id) }}">
+                                {{ calibration.case.name }}
+                            </a>
+                        </td>
+                        <td>
+                            {% if calibration.simulation_type.startswith('Batch Calibration') %}
+                                {% set method = calibration.simulation_type.replace('Batch Calibration (', '').replace(')', '') %}
+                                <span class="badge bg-warning">Batch {{ method }}</span>
+                            {% else %}
+                                {% set method = calibration.simulation_type.replace('Calibration (', '').replace(')', '') %}
+                                <span class="badge bg-info">{{ method }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ calibration.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>
+                            {% if item.error_value is not none %}
+                                <span class="badge bg-success">{{ "%.2f"|format(item.error_value) }}%</span>
+                            {% else %}
+                                <span class="badge bg-secondary">No data</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                {% if calibration.simulation_type.startswith('Batch Calibration') %}
+                                <a href="{{ url_for('calibration.batch_calibration_details', result_id=calibration.id) }}" class="btn btn-outline-primary" title="View Batch Details">
+                                    <i class="bi bi-collection"></i> Details
+                                </a>
+                                {% else %}
+                                <a href="{{ url_for('calibration.calibration_details', result_id=calibration.id) }}" class="btn btn-outline-primary" title="View Calibration Details">
+                                    <i class="bi bi-sliders"></i> Details
+                                </a>
+                                {% endif %}
+                                <a href="{{ url_for('simulations.api_download_result', result_id=calibration.id) }}" class="btn btn-outline-info" title="Download Excel">
+                                    <i class="bi bi-download"></i>
+                                </a>
+                                <button type="button" class="btn btn-outline-danger delete-calibration-btn" data-calibration-id="{{ calibration.id }}" title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-sliders display-1 text-muted mb-3"></i>
+            <h5 class="text-muted">No calibration runs available</h5>
+            <p class="text-muted">Create your first parameter calibration to get started</p>
+            <a href="{{ url_for('calibration.create_calibration') }}" class="btn btn-primary mt-3 me-2">
+                <i class="bi bi-plus-circle me-2"></i>Create New Calibration
+            </a>
+            <a href="{{ url_for('calibration.batch_calibration') }}" class="btn btn-outline-primary mt-3">
+                <i class="bi bi-collection me-2"></i>Batch Calibration
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">What is Parameter Calibration?</h5>
+            </div>
+            <div class="card-body">
+                <p>Parameter calibration is the process of adjusting model parameters to match simulation outputs with experimental or reference data. It helps in improving model accuracy, validating simulation models, and ensuring reliable predictions.</p>
+                
+                <h6 class="mt-3"><i class="bi bi-check-circle text-success me-2"></i>Benefits</h6>
+                <ul>
+                    <li>Improve model accuracy and reliability</li>
+                    <li>Automatically find optimal parameter values</li>
+                    <li>Reduce manual trial-and-error efforts</li>
+                    <li>Validate simulation models against real-world data</li>
+                    <li>Quantify parameter uncertainty and sensitivity</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Available Calibration Methods</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    <div class="list-group-item">
+                        <h6 class="mb-1">Particle Swarm Optimization (PSO) <span class="badge bg-success">Available</span></h6>
+                        <p class="mb-1 small text-muted">Population-based stochastic optimization technique inspired by social behavior of bird flocking or fish schooling.</p>
+                    </div>
+                    <div class="list-group-item">
+                        <h6 class="mb-1"><s>Genetic Algorithm (GA)</s> <span class="badge bg-secondary">Coming Soon</span></h6>
+                        <p class="mb-1 small text-muted text-muted-lighter">Evolutionary algorithm that mimics natural selection to find optimal parameter values.</p>
+                    </div>
+                    <div class="list-group-item">
+                        <h6 class="mb-1"><s>Bayesian Optimization</s> <span class="badge bg-secondary">Coming Soon</span></h6>
+                        <p class="mb-1 small text-muted text-muted-lighter">Sequential design strategy for global optimization of black-box functions.</p>
+                    </div>
+                    <div class="list-group-item">
+                        <h6 class="mb-1"><s>Nelder-Mead Simplex</s> <span class="badge bg-secondary">Coming Soon</span></h6>
+                        <p class="mb-1 small text-muted text-muted-lighter">Direct search method for multidimensional unconstrained optimization.</p>
+                    </div>
+                    <div class="list-group-item">
+                        <h6 class="mb-1"><s>Differential Evolution</s> <span class="badge bg-secondary">Coming Soon</span></h6>
+                        <p class="mb-1 small text-muted text-muted-lighter">Population-based optimization algorithm for multidimensional real-valued functions.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>    
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteCalibrationModal" tabindex="-1" aria-labelledby="deleteCalibrationModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteCalibrationModalLabel">Confirm Deletion</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this calibration run?</p>
+                <p class="text-danger">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Delete calibration functionality
+    const deleteCalibrationModal = new bootstrap.Modal(document.getElementById('deleteCalibrationModal'));
+    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+    let calibrationToDelete = null;
+    
+    // Add event listeners to delete buttons
+    document.querySelectorAll('.delete-calibration-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            calibrationToDelete = this.getAttribute('data-calibration-id');
+            deleteCalibrationModal.show();
+        });
+    });
+    
+    // Confirm delete button
+    if (confirmDeleteBtn) {
+        confirmDeleteBtn.addEventListener('click', function() {
+            if (!calibrationToDelete) return;
+            
+            // Send delete request
+            fetch(`/simulations/api/result/${calibrationToDelete}`, {
+                method: 'DELETE'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to delete calibration');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Reload the page to show updated list
+                window.location.reload();
+            })
+            .catch(error => {
+                console.error('Error deleting calibration:', error);
+                alert(`Error: ${error.message}`);
+                deleteCalibrationModal.hide();
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

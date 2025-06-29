@@ -1,0 +1,1141 @@
+{% extends "base.html" %}
+
+{% block title %}{% if case %}Run Simulation | {{ case.name }}{% else %}Select Case{% endif %} | Simulation Platform{% endblock %}
+
+{% block content %}
+{% if case %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-play-circle text-success me-2"></i>Run Simulation: {{ case.name }}</h1>
+    <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Case
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Input Parameters</h5>
+                <button type="button" id="runSimulationBtn" class="btn btn-success">
+                    <i class="bi bi-play-fill"></i> Run Simulation
+                </button>
+            </div>
+            <div class="card-body">
+                {% if case.parameters and case.parameters.InputParams %}
+                <form id="simulationForm">
+                    {% for param_type, params in case.parameters.InputParams.items() %}
+                        {% for param_name, param_config in params.items() %}
+                        <div class="mb-3">
+                            <label for="{{ param_name }}" class="form-label">{{ param_name }}</label>
+                            
+                            {% if param_type == 'MaterialStream' and param_config.ParameterType and param_config.ParameterType != 'Property' %}
+                                <!-- Component-based parameter (mass fractions, mass flows, molar flows) -->
+                                <div class="d-grid">
+                                    <button type="button" class="btn btn-outline-success component-param-btn" 
+                                            data-param-name="{{ param_name }}" 
+                                            data-param-type="{{ param_config.ParameterType }}"
+                                            data-stream-name="{{ param_config.StreamName }}"
+                                            style="--bs-btn-color: #198754; --bs-btn-border-color: #198754; --bs-btn-hover-bg: rgba(25, 135, 84, 0.1); --bs-btn-hover-border-color: #198754; --bs-btn-active-bg: rgba(25, 135, 84, 0.2);">
+                                        <i class="bi bi-list-ul me-2"></i>Edit Components ({{ param_config.ParameterType }})
+                                    </button>
+                                    <input type="hidden" id="{{ param_name }}_components" name="{{ param_name }}_components" value="">
+                                </div>
+                            {% else %}
+                                <!-- Regular parameter -->
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="{{ param_name }}" name="{{ param_name }}" step="any">
+                                    {% if param_config.UOM %}
+                                        <span class="input-group-text">{{ param_config.UOM }}</span>
+                                    {% endif %}
+                                </div>
+                                <div class="form-text">
+                                    {% if param_type == 'Spreadsheet' %}
+                                        Spreadsheet: {{ param_config.SpreadsheetName }}, Cell: {{ param_config.Cell }}
+                                    {% elif param_type == 'MaterialStream' %}
+                                        Stream: {{ param_config.StreamName }}
+                                        {% if param_config.ParameterType == 'Property' %}
+                                            , Property: {{ param_config.PropertyName }}
+                                        {% else %}
+                                            , Type: {{ param_config.ParameterType }}
+                                        {% endif %}
+                                    {% elif param_type == 'EnergyStream' %}
+                                        Stream: {{ param_config.StreamName }}, Property: {{ param_config.PropertyName }}
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    {% endfor %}
+                </form>
+                {% else %}
+                <div class="alert alert-warning">
+                    <p>No input parameters configured for this case. <a href="{{ url_for('parameters.configure_parameters', case_id=case.id) }}">Configure parameters</a> to run simulations.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>        
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Simulation Status</h5>
+                <div class="btn-group" id="resultActionButtons" style="display: none;">
+                    <button type="button" id="saveResultsBtn" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Save Results
+                    </button>
+                    <button type="button" id="downloadResultsBtn" class="btn btn-info">
+                        <i class="bi bi-download"></i> Download Results
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="simulationStatus" class="alert alert-info">
+                    <p>Enter input parameters and click "Run Simulation" to start.</p>
+                </div>
+        
+                <div id="simulationProgress" style="display: none;">
+                    <div class="progress mb-3">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <p id="progressText" class="text-center">Initializing simulation...</p>
+                </div>
+        
+                <div id="simulationResults" style="display: none;">
+                    <h6>Output Parameters</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Parameter</th>
+                                    <th>Value</th>
+                                    <th>Unit</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultsTable">
+                                <!-- Results will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>        
+    </div>
+        <!-- Save Simulation Modal -->
+        <div class="modal fade" id="saveSimulationModal" tabindex="-1" aria-labelledby="saveSimulationModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="saveSimulationModalLabel">Save Simulation Results</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="saveSimulationForm">
+                            <div class="mb-3">
+                                <label for="simulationName" class="form-label">Simulation Name</label>
+                                <input type="text" class="form-control" id="simulationName" placeholder="Enter a descriptive name">
+                                <div class="form-text">Provide a name to easily identify this simulation later.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="simulationType" class="form-label">Simulation Type</label>
+                                <select class="form-select" id="simulationType">
+                                    <option value="Single Run">Single Run</option>
+                                    <option value="LHS">Latin Hypercube Sampling (LHS)</option>
+                                    <option value="Grid">Grid Sampling</option>
+                                    <option value="Monte Carlo">Monte Carlo</option>
+                                    <option value="Sensitivity">Sensitivity Analysis</option>
+                                    <option value="Custom">Custom</option>
+                                </select>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="confirmSaveBtn">
+                            <i class="bi bi-save"></i> Save
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Component Parameters Modal -->
+        <div class="modal fade" id="componentParamModal" tabindex="-1" aria-labelledby="componentParamModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="componentParamModalLabel">Edit Component Values</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <div id="componentParamInfo" class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i>
+                                <span id="componentParamDescription">Edit component values for this parameter.</span>
+                            </div>
+                        </div>
+                        
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover" id="componentTable">
+                                <thead>
+                                    <tr>
+                                        <th>Component</th>
+                                        <th>Value</th>
+                                        <th>Unit</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="componentTableBody">
+                                    <!-- Component rows will be added here dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="saveComponentsBtn">Save Changes</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+{% else %}
+<!-- Case selection interface when no case is selected -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-play-circle text-success me-2"></i>Run Simulation</h1>
+    <a href="{{ url_for('cases.list_cases') }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Cases
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Select a Case</h5>
+    </div>
+    <div class="card-body">
+        <p class="mb-4">Please select a case to run a simulation:</p>
+        
+        <div class="row" id="caseSelectionContainer">
+            <div class="col-12 text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Loading available cases...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Fetch available cases
+    fetch('/cases/api/list')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('caseSelectionContainer');
+            
+            if (data && data.length > 0) {
+                container.innerHTML = '';
+                
+                // Create a card for each case
+                data.forEach(caseData => {
+                    const caseCard = document.createElement('div');
+                    caseCard.className = 'col-md-4 mb-4';
+                    caseCard.innerHTML = `
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">${caseData.name}</h5>
+                                <p class="card-text text-muted">${caseData.description || 'No description available'}</p>
+                            </div>
+                            <div class="card-footer bg-transparent">
+                                <a href="/simulations/run/${caseData.id}" class="btn btn-primary w-100">
+                                    <i class="bi bi-play-fill"></i> Select Case
+                                </a>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(caseCard);
+                });
+            } else {
+                container.innerHTML = `
+                    <div class="col-12">
+                        <div class="alert alert-warning">
+                            <p>No cases available. <a href="{{ url_for('cases.api_create_case') }}">Create a new case</a> to run simulations.</p>
+                        </div>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching cases:', error);
+            document.getElementById('caseSelectionContainer').innerHTML = `
+                <div class="col-12">
+                    <div class="alert alert-danger">
+                        <p><strong>Error:</strong> Failed to load cases. Please try again later.</p>
+                    </div>
+                </div>
+            `;
+        });
+});
+</script>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if case %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const caseId = {{ case.id }};
+    let simulationResults = null;
+    let componentData = {}; // Store component data for each parameter
+
+    // Initialize the component modal
+    const componentParamModal = new bootstrap.Modal(document.getElementById('componentParamModal'));
+    
+    // Add event listeners to component parameter buttons
+    document.querySelectorAll('.component-param-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const paramName = this.getAttribute('data-param-name');
+            const paramType = this.getAttribute('data-param-type');
+            const streamName = this.getAttribute('data-stream-name');
+            
+            openComponentModal(paramName, paramType, streamName);
+        });
+    });
+    
+    // Save components button
+    document.getElementById('saveComponentsBtn').addEventListener('click', function() {
+        saveComponentValues();
+    });
+
+    // Get DOM elements
+    const runSimulationBtn = document.getElementById('runSimulationBtn');
+    const simulationForm = document.getElementById('simulationForm');
+    const simulationStatus = document.getElementById('simulationStatus');
+    const simulationProgress = document.getElementById('simulationProgress');
+    const progressBar = document.querySelector('.progress-bar');
+    const progressText = document.getElementById('progressText');
+    const simulationResultsDiv = document.getElementById('simulationResults');
+    const resultsTable = document.getElementById('resultsTable');
+    const saveResultsBtn = document.getElementById('saveResultsBtn');
+    const downloadResultsBtn = document.getElementById('downloadResultsBtn');
+    
+    // Initialize save modal
+    const saveSimulationModal = new bootstrap.Modal(document.getElementById('saveSimulationModal'));
+    const confirmSaveBtn = document.getElementById('confirmSaveBtn');
+
+    if (downloadResultsBtn) {
+        downloadResultsBtn.addEventListener('click', downloadResults);
+    }
+
+    // Add event listeners
+    if (runSimulationBtn) {
+        runSimulationBtn.addEventListener('click', runSimulation);
+    }
+
+    if (saveResultsBtn) {
+        saveResultsBtn.addEventListener('click', function() {
+            if (!simulationResults) {
+                alert('No simulation results to save.');
+                return;
+            }
+            
+            // Show the save modal instead of saving directly
+            saveSimulationModal.show();
+        });
+    }
+    
+    if (confirmSaveBtn) {
+        confirmSaveBtn.addEventListener('click', function() {
+            const name = document.getElementById('simulationName').value;
+            const type = document.getElementById('simulationType').value;
+            saveResults(name, type);
+        });
+    }
+
+    // Function to open the component modal
+    function openComponentModal(paramName, paramType, streamName) {
+        // Set modal title and description
+        document.getElementById('componentParamModalLabel').textContent = `Edit ${paramName}`;
+        
+        // Get component data if it exists, or initialize with empty values
+        let components = componentData[paramName] || {};
+        
+        // If we have simulation results, try to get component data from there
+        if (simulationResults && simulationResults.inputs && simulationResults.inputs[paramName]) {
+            components = simulationResults.inputs[paramName];
+            componentData[paramName] = components;
+        }
+        
+        // Determine the unit of measurement
+        let uom = '';
+        // Check if we have any component with a uom
+        if (components && Object.values(components).some(v => typeof v === 'object' && v.uom)) {
+            // Get the first component with a uom
+            for (const comp of Object.values(components)) {
+                if (typeof comp === 'object' && comp.uom) {
+                    uom = comp.uom;
+                    break;
+                }
+            }
+        }
+        
+        // Set description based on parameter type and unit
+        let description = `Edit component values for ${streamName} (${paramType})`;
+        if (paramType === 'MassFrac') {
+            if (uom && uom.includes('%')) {
+                description += '. The sum of all fractions should equal 100%.';
+            } else {
+                description += '. The sum of all fractions should equal 1.0.';
+            }
+        }
+        document.getElementById('componentParamDescription').textContent = description;
+        
+        // Store the UOM for later use
+        document.getElementById('saveComponentsBtn').setAttribute('data-uom', uom);
+        
+        // Clear the table body
+        const tableBody = document.getElementById('componentTableBody');
+        tableBody.innerHTML = '';
+
+        // If we still don't have component data, initialize with an empty object
+        // and allow users to add components manually
+        if (Object.keys(components).length === 0) {
+            // Show empty state with option to add components
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="3" class="text-center">
+                        <p class="mb-3">No components defined yet.</p>
+                        <button type="button" class="btn btn-sm btn-primary" id="addComponentBtn">
+                            <i class="bi bi-plus-circle me-1"></i> Add Component
+                        </button>
+                    </td>
+                </tr>
+            `;
+            
+            // Add event listener for the add component button
+            document.getElementById('addComponentBtn').addEventListener('click', function() {
+                addNewComponent(paramName);
+            });
+        } else {
+            // Populate the table with existing component data
+            populateComponentTable(tableBody, components, paramType);
+            
+            // Add a button to add more components
+            const addRow = document.createElement('tr');
+            addRow.innerHTML = `
+                <td colspan="3" class="text-center">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="addComponentBtn">
+                        <i class="bi bi-plus-circle me-1"></i> Add Component
+                    </button>
+                </td>
+            `;
+            tableBody.appendChild(addRow);
+            
+            // Add event listener for the add component button
+            document.getElementById('addComponentBtn').addEventListener('click', function() {
+                addNewComponent(paramName);
+            });
+        }
+        
+        // Store the current parameter name as a data attribute on the save button
+        document.getElementById('saveComponentsBtn').setAttribute('data-param-name', paramName);
+        document.getElementById('saveComponentsBtn').setAttribute('data-param-type', paramType);
+        
+        // Show the modal
+        componentParamModal.show();
+    }
+
+    // Function to add a new component
+    function addNewComponent(paramName) {
+        // Create a prompt for the component name
+        const componentName = prompt('Enter component name:');
+        
+        // Validate component name
+        if (!componentName || componentName.trim() === '') {
+            return;
+        }
+        
+        // Get existing components
+        let components = componentData[paramName] || {};
+        
+        // Check if component already exists
+        if (components[componentName]) {
+            alert(`Component "${componentName}" already exists.`);
+            return;
+        }
+        
+        // Add the new component with default value 0
+        components[componentName] = 0;
+        
+        // Update component data
+        componentData[paramName] = components;
+        
+        // Re-open the modal to refresh the component list
+        const button = document.querySelector(`.component-param-btn[data-param-name="${paramName}"]`);
+        if (button) {
+            // Use a more subtle success style
+            button.classList.add('btn-outline-secondary');
+            button.style.opacity = '0.85'; // Make it slightly less intense
+            button.style.backgroundColor = '#20c997'; // Use a lighter green
+            button.style.borderColor = '#20c997';
+            
+            // Add a badge showing the number of components
+            const componentCount = Object.keys(components).length;
+            const badgeSpan = document.createElement('span');
+            badgeSpan.className = 'badge bg-light text-dark ms-2';
+            badgeSpan.textContent = `${componentCount} components set`;
+            
+            // Remove any existing badge
+            const existingBadge = button.querySelector('.badge');
+            if (existingBadge) {
+                button.removeChild(existingBadge);
+            }
+            
+            button.appendChild(badgeSpan);
+        }
+    }
+    
+    // Function to populate the component table
+    function populateComponentTable(tableBody, components, paramType) {
+        tableBody.innerHTML = '';
+        
+        // Get the appropriate unit based on parameter type and component data
+        let unit = '';
+        let isPercentage = false;
+        
+        // Check if we have any component with a uom
+        if (Object.values(components).some(v => typeof v === 'object' && v.uom)) {
+            // Get the first component with a uom
+            for (const comp of Object.values(components)) {
+                if (typeof comp === 'object' && comp.uom) {
+                    unit = comp.uom;
+                    isPercentage = unit.includes('%');
+                    break;
+                }
+            }
+        } else {
+            // Default units based on parameter type
+            if (paramType === 'MassFrac') {
+                unit = 'fraction';
+            } else if (paramType === 'MassFlow') {
+                unit = 'kg/h';
+            } else if (paramType === 'MolarFlow') {
+                unit = 'kgmole/h';
+            }
+        }
+        
+        // Add rows for each component
+        Object.entries(components).forEach(([component, value]) => {
+            // Extract value from object if needed
+            let displayValue = value;
+            if (typeof value === 'object' && value !== null && value.value !== undefined) {
+                displayValue = value.value;
+            }
+            
+            // Format the value if it's a number
+            if (typeof displayValue === 'number') {
+                displayValue = displayValue.toFixed(6);
+            }
+            
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${component}</td>
+                <td>
+                    <input type="number" class="form-control form-control-sm component-value" 
+                        data-component="${component}" value="${displayValue}" step="0.000001">
+                </td>
+                <td>${unit}</td>
+            `;
+            tableBody.appendChild(row);
+        });
+        
+        // Add event listeners for mass fraction inputs to validate total
+        if (paramType === 'MassFrac') {
+            // Add a total row
+            const totalRow = document.createElement('tr');
+            totalRow.className = 'table-info';
+            totalRow.innerHTML = `
+                <td><strong>Total</strong></td>
+                <td id="fractionTotal">0.000000</td>
+                <td>${unit}</td>
+            `;
+            tableBody.appendChild(totalRow);
+            
+            // Add event listeners to update the total
+            tableBody.querySelectorAll('.component-value').forEach(input => {
+                input.addEventListener('input', function() {
+                    updateFractionTotal(isPercentage);
+                });
+            });
+            
+            // Calculate initial total
+            updateFractionTotal(isPercentage);
+        }
+    }
+
+    // Function to update the total for mass fractions
+    function updateFractionTotal(isPercentage) {
+        const inputs = document.querySelectorAll('#componentTableBody .component-value');
+        let total = 0;
+        
+        inputs.forEach(input => {
+            const value = parseFloat(input.value) || 0;
+            total += value;
+        });
+        
+        const totalElement = document.getElementById('fractionTotal');
+        totalElement.textContent = total.toFixed(6);
+        
+        // Highlight if total is not correct (with some tolerance for floating-point errors)
+        const targetTotal = isPercentage ? 100.0 : 1.0;
+        const tolerance = isPercentage ? 0.0001 : 0.000001;
+        
+        if (Math.abs(total - targetTotal) > tolerance) {
+            totalElement.classList.add('text-danger');
+            totalElement.classList.remove('text-success');
+        } else {
+            totalElement.classList.add('text-success');
+            totalElement.classList.remove('text-danger');
+        }
+    }
+
+    // Function to save component values
+    function saveComponentValues() {
+        const paramName = document.getElementById('saveComponentsBtn').getAttribute('data-param-name');
+        const paramType = document.getElementById('saveComponentsBtn').getAttribute('data-param-type');
+        const uom = document.getElementById('saveComponentsBtn').getAttribute('data-uom') || '';
+        const inputs = document.querySelectorAll('#componentTableBody .component-value');
+        
+        // Create an object to store component values
+        const components = {};
+        
+        inputs.forEach(input => {
+            const component = input.getAttribute('data-component');
+            const value = parseFloat(input.value) || 0;
+            
+            // Store with UOM if available
+            if (uom) {
+                components[component] = {
+                    value: value,
+                    uom: uom
+                };
+            } else {
+                components[component] = value;
+            }
+        });
+        
+        // Validate total for mass fractions
+        if (paramType === 'MassFrac') {
+            const isPercentage = uom.includes('%');
+            const targetTotal = isPercentage ? 100.0 : 1.0;
+            const tolerance = isPercentage ? 0.0001 : 0.000001;
+            
+            let total = 0;
+            Object.values(components).forEach(comp => {
+                if (typeof comp === 'object' && comp.value !== undefined) {
+                    total += comp.value;
+                } else {
+                    total += comp;
+                }
+            });
+            
+            if (Math.abs(total - targetTotal) > tolerance) {
+                const message = isPercentage 
+                    ? `The sum of mass fractions should equal 100%. Current total: ${total.toFixed(4)}%`
+                    : `The sum of mass fractions should equal 1.0. Current total: ${total.toFixed(6)}`;
+                    
+                if (!confirm(`${message}\nDo you want to save anyway?`)) {
+                    return;
+                }
+            }
+        }
+        
+        // Store the component data
+        componentData[paramName] = components;
+        
+        // Update the hidden input field
+        const hiddenInput = document.getElementById(`${paramName}_components`);
+        if (hiddenInput) {
+            hiddenInput.value = JSON.stringify(components);
+        }
+        
+        // Close the modal
+        componentParamModal.hide();
+        
+        // Update the button to show it has data
+        const button = document.querySelector(`.component-param-btn[data-param-name="${paramName}"]`);
+        if (button) {
+            // Use a more subtle success style
+            button.classList.add('btn-outline-secondary');
+            button.style.opacity = '0.85'; // Make it slightly less intense
+            button.style.backgroundColor = '#20c997'; // Use a lighter green
+            button.style.borderColor = '#20c997';
+            
+            // Add a badge showing the number of components
+            const componentCount = Object.keys(components).length;
+            const badgeSpan = document.createElement('span');
+            badgeSpan.className = 'badge bg-light text-dark ms-2';
+            badgeSpan.textContent = `${componentCount} components set`;
+            
+            // Remove any existing badge
+            const existingBadge = button.querySelector('.badge');
+            if (existingBadge) {
+                button.removeChild(existingBadge);
+            }
+            
+            button.appendChild(badgeSpan);
+        }
+    }
+
+
+    // Modify the runSimulation function to include component data
+    function runSimulation() {
+        // Disable the run button
+        runSimulationBtn.disabled = true;
+        runSimulationBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Running...';
+
+        // Show progress
+        simulationStatus.style.display = 'none';
+        simulationProgress.style.display = 'block';
+        simulationResultsDiv.style.display = 'none';
+
+        // Collect input parameters
+        const formData = new FormData(simulationForm);
+        const inputParams = {};
+
+        for (const [key, value] of formData.entries()) {
+            // Skip component data hidden fields
+            if (key.endsWith('_components')) continue;
+            
+            if (value !== '') {
+                inputParams[key] = parseFloat(value);
+            }
+        }
+        
+        // Hide the result action buttons
+        document.getElementById('resultActionButtons').style.display = 'none';
+
+        // Add component data to input parameters
+        for (const [paramName, components] of Object.entries(componentData)) {
+            inputParams[paramName] = components;
+        }
+
+        // Update progress
+        updateProgress(10, 'Initializing simulation...');
+
+        // Send request to run simulation
+        fetch(`/simulations/api/run/${caseId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ input_params: inputParams })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Simulation failed');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Update progress
+            updateProgress(100, 'Simulation completed successfully!');
+
+            // Store results
+            simulationResults = data.results;
+
+            // Display results
+            displayResults(data.results);
+
+            // Re-enable run button
+            runSimulationBtn.disabled = false;
+            runSimulationBtn.innerHTML = '<i class="bi bi-play-fill"></i> Run Simulation';
+            
+            // Load the input parameters back into the form fields
+            loadInputParameters(data.results.inputs || inputParams);
+        })
+        .catch(error => {
+            // Show error
+            simulationStatus.style.display = 'block';
+            simulationStatus.className = 'alert alert-danger';
+            simulationStatus.innerHTML = `<p><strong>Error:</strong> ${error.message}</p>`;
+
+            // Hide progress
+            simulationProgress.style.display = 'none';
+
+            // Re-enable run button
+            runSimulationBtn.disabled = false;
+            runSimulationBtn.innerHTML = '<i class="bi bi-play-fill"></i> Run Simulation';
+        });
+    }
+
+    // Function to load input parameters back into the form fields
+    function loadInputParameters(inputParams) {
+        // If inputParams is not provided or empty, do nothing
+        if (!inputParams || Object.keys(inputParams).length === 0) {
+            return;
+        }
+        
+        // Iterate through each input parameter
+        Object.entries(inputParams).forEach(([paramName, paramValue]) => {
+            // Check if this is a component-based parameter
+            if (typeof paramValue === 'object' && paramValue !== null && 
+                !paramValue.hasOwnProperty('value') && !paramValue.hasOwnProperty('uom')) {
+                
+                // This is likely a component dictionary
+                componentData[paramName] = paramValue;
+                
+                // Update the hidden input field
+                const hiddenInput = document.getElementById(`${paramName}_components`);
+                if (hiddenInput) {
+                    hiddenInput.value = JSON.stringify(paramValue);
+                }
+                
+                // Update the button to show it has data
+                const button = document.querySelector(`.component-param-btn[data-param-name="${paramName}"]`);
+                if (button) {
+                    button.classList.add('btn-outline-secondary');
+                    
+                    // Add a badge showing the number of components
+                    const componentCount = Object.keys(paramValue).length;
+                    const badgeSpan = document.createElement('span');
+                    badgeSpan.className = 'badge bg-light text-dark ms-2';
+                    badgeSpan.textContent = `${componentCount} components set`;
+                    
+                    // Remove any existing badge
+                    const existingBadge = button.querySelector('.badge');
+                    if (existingBadge) {
+                        button.removeChild(existingBadge);
+                    }
+                    
+                    button.appendChild(badgeSpan);
+                }
+            } else {
+                // Regular parameter
+                const inputField = document.getElementById(paramName);
+                
+                // If the input field exists, set its value
+                if (inputField) {
+                    // Extract value from object if needed
+                    let displayValue = paramValue;
+                    if (typeof paramValue === 'object' && paramValue !== null && paramValue.value !== undefined) {
+                        displayValue = paramValue.value;
+                    }
+                    
+                    // Format the value if it's a number
+                    if (typeof displayValue === 'number') {
+                        // Use toFixed(4) for better readability, adjust precision as needed
+                        displayValue = displayValue.toFixed(4);
+                    }
+                    
+                    // Set the value as a string to avoid parsing issues
+                    inputField.value = String(displayValue);
+                    
+                    // Add a visual indication that the value has been loaded
+                    inputField.classList.add('is-valid');
+                    
+                    // Remove the visual indication after a delay
+                    setTimeout(() => {
+                        inputField.classList.remove('is-valid');
+                    }, 3000);
+                }
+            }
+        });
+        
+        // Add a notification that parameters have been loaded
+        const notification = document.createElement('div');
+        notification.className = 'alert alert-info alert-dismissible fade show mt-3';
+        notification.innerHTML = `
+            <strong>Input parameters loaded!</strong> The form has been populated with the values used in the simulation.
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        
+        // Insert the notification before the form
+        simulationForm.parentNode.insertBefore(notification, simulationForm);
+        
+        // Remove the notification after a delay
+        setTimeout(() => {
+            notification.remove();
+        }, 5000);
+    }
+
+
+    // Function to update progress
+    function updateProgress(percent, message) {
+        progressBar.style.width = `${percent}%`;
+        progressText.textContent = message;
+
+        if (percent === 100) {
+            setTimeout(() => {
+                simulationProgress.style.display = 'none';
+                simulationResultsDiv.style.display = 'block';
+            }, 1000);
+        }
+    }
+
+    // Function to display results
+    function displayResults(results) {
+        resultsTable.innerHTML = '';
+
+        // Check if results is an object with outputs property
+        const outputResults = results.outputs || results;
+
+        // Process each output parameter
+        Object.entries(outputResults).forEach(([param, value]) => {
+            // Check if this is a component-based parameter
+            const isComponentParam = typeof value === 'object' && value !== null && 
+                                    !value.hasOwnProperty('value') && 
+                                    !value.hasOwnProperty('uom') &&
+                                    Object.keys(value).length > 0;
+            
+            if (isComponentParam) {
+                // This is a component-based parameter (like mass fractions)
+                // Create a safe ID by replacing non-alphanumeric characters
+                const safeParamId = `output-${param.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                
+                // Create header row with toggle button
+                const headerRow = document.createElement('tr');
+                headerRow.className = 'component-header';
+                headerRow.innerHTML = `
+                    <td>
+                        <button class="btn btn-sm btn-link p-0 me-2 toggle-components" data-param="${safeParamId}">
+                            <i class="bi bi-plus-circle"></i>
+                        </button>
+                        ${param}
+                    </td>
+                    <td colspan="2">
+                        <span class="badge bg-info">${Object.keys(value).length} components</span>
+                    </td>
+                `;
+                
+                resultsTable.appendChild(headerRow);
+                
+                // Create container row for components (immediately after header)
+                const containerRow = document.createElement('tr');
+                containerRow.className = 'component-container';
+                containerRow.innerHTML = `
+                    <td colspan="3" class="p-0">
+                        <div id="components-${safeParamId}" class="component-rows" style="display: none;">
+                            <table class="table table-sm mb-0">
+                                <tbody id="components-body-${safeParamId}"></tbody>
+                            </table>
+                        </div>
+                    </td>
+                `;
+                
+                resultsTable.appendChild(containerRow);
+                
+                // Add component rows to the nested table
+                const componentsBody = document.getElementById(`components-body-${safeParamId}`);
+                
+                // Add rows for each component
+                Object.entries(value).forEach(([componentName, componentValue]) => {
+                    const componentRow = document.createElement('tr');
+                    componentRow.className = 'table-light';
+                    
+                    // Handle different component value formats
+                    let displayValue, unit;
+                    
+                    if (typeof componentValue === 'object' && componentValue !== null) {
+                        if (componentValue.value !== undefined) {
+                            // Format: { value: X, uom: Y }
+                            displayValue = typeof componentValue.value === 'number' ? 
+                                componentValue.value.toFixed(4) : componentValue.value;
+                            unit = componentValue.uom || '';
+                        } else {
+                            // Unexpected format
+                            displayValue = JSON.stringify(componentValue);
+                            unit = '';
+                        }
+                    } else {
+                        // Simple value
+                        displayValue = typeof componentValue === 'number' ? 
+                            componentValue.toFixed(4) : componentValue;
+                        unit = '';
+                    }
+                    
+                    componentRow.innerHTML = `
+                        <td class="ps-4"><i class="bi bi-dot me-2"></i>${componentName}</td>
+                        <td>${displayValue}</td>
+                        <td>${unit}</td>
+                    `;
+                    
+                    componentsBody.appendChild(componentRow);
+                });
+            } else {
+                // Regular parameter
+                const row = document.createElement('tr');
+
+                // Handle different result formats
+                let displayValue, unit;
+
+                if (typeof value === 'object' && value !== null) {
+                    if (value.value !== undefined) {
+                        // Format: { value: X, uom: Y }
+                        displayValue = value.value;
+                        unit = value.uom || '';
+                    } else {
+                        // Format: { component1: X, component2: Y, ... }
+                        // For component-based parameters, show as JSON
+                        displayValue = JSON.stringify(value);
+                        unit = '';
+                    }
+                } else {
+                    // Simple value
+                    displayValue = value;
+                    unit = '';
+                }
+
+                // Format the value if it's a number
+                if (typeof displayValue === 'number') {
+                    displayValue = displayValue.toFixed(4);
+                }
+
+                row.innerHTML = `
+                    <td>${param}</td>
+                    <td>${displayValue}</td>
+                    <td>${unit}</td>
+                `;
+
+                resultsTable.appendChild(row);
+            }
+        });
+        
+        document.getElementById('resultActionButtons').style.display = 'flex';
+
+        // Add event listeners for toggle buttons
+        document.querySelectorAll('.toggle-components').forEach(button => {
+            button.addEventListener('click', function() {
+                const param = this.getAttribute('data-param');
+                const componentRows = document.getElementById(`components-${param}`);
+                const icon = this.querySelector('i');
+                
+                if (componentRows && componentRows.style.display === 'none') {
+                    componentRows.style.display = 'block';
+                    icon.classList.remove('bi-plus-circle');
+                    icon.classList.add('bi-dash-circle');
+                } else if (componentRows) {
+                    componentRows.style.display = 'none';
+                    icon.classList.remove('bi-dash-circle');
+                    icon.classList.add('bi-plus-circle');
+                }
+            });
+        });
+    }
+
+    // Function to save results with name and type
+    function saveResults(name, type) {
+        if (!simulationResults) {
+            alert('No simulation results to save.');
+            return;
+        }
+
+        // Disable the save button
+        confirmSaveBtn.disabled = true;
+        confirmSaveBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...';
+
+        // Send request to save results
+        fetch(`/simulations/api/save_results/${caseId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+                results: simulationResults,
+                name: name || null,
+                simulation_type: type || 'Single Run'
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to save results');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Hide the modal
+            saveSimulationModal.hide();
+            
+            // Show success message
+            alert('Results saved successfully!');
+
+            // Re-enable save button
+            confirmSaveBtn.disabled = false;
+            confirmSaveBtn.innerHTML = '<i class="bi bi-save"></i> Save';
+            
+            // Optionally redirect to results page
+            if (data.result_id) {
+                window.location.href = `/simulations/results/${caseId}`;
+            }
+        })
+        .catch(error => {
+            // Show error
+            alert(`Error: ${error.message}`);
+
+            // Re-enable save button
+            confirmSaveBtn.disabled = false;
+            confirmSaveBtn.innerHTML = '<i class="bi bi-save"></i> Save';
+        });
+    }
+
+    // Function to download results
+    function downloadResults() {
+        if (!simulationResults) {
+            alert('No simulation results to download.');
+            return;
+        }
+
+        // Disable the download button
+        downloadResultsBtn.disabled = true;
+        downloadResultsBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Downloading...';
+
+        // Use fetch API for better handling
+        fetch(`/simulations/api/download_temp_result/${caseId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ results: simulationResults })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to download results');
+            }
+            return response.blob();
+        })
+        .then(blob => {
+            // Create a URL for the blob
+            const url = window.URL.createObjectURL(blob);
+            
+            // Create a link to download the file
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Simulation_Results_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`;
+            
+            // Append the link to the document
+            document.body.appendChild(a);
+            
+            // Click the link to trigger the download
+            a.click();
+            
+            // Clean up
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            // Re-enable the download button
+            downloadResultsBtn.disabled = false;
+            downloadResultsBtn.innerHTML = '<i class="bi bi-download"></i> Download Results';
+        })
+        .catch(error => {
+            console.error('Error downloading results:', error);
+            alert(`Error downloading results: ${error.message}`);
+            
+            // Re-enable the download button
+            downloadResultsBtn.disabled = false;
+            downloadResultsBtn.innerHTML = '<i class="bi bi-download"></i> Download Results';
+        });
+    }
+});
+</script>
+{% endif %}
+{% endblock %}
+

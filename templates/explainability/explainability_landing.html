@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Explainability | Simulation Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-lightbulb text-primary me-2"></i>Explainability</h1>
+    <div>
+        <a href="#" class="btn btn-success me-2" onclick="alert('Coming soon!')">
+            <i class="bi bi-bar-chart me-2"></i>Feature Importance
+        </a>
+        <a href="#" class="btn btn-primary me-2" onclick="alert('Coming soon!')">
+            <i class="bi bi-puzzle me-2"></i>SHAP Analysis
+        </a>
+        <a href="#" class="btn btn-warning me-2" onclick="alert('Coming soon!')">
+            <i class="bi bi-search me-2"></i>LIME Explain
+        </a>
+        <a href="#" class="btn btn-info me-2" onclick="alert('Coming soon!')">
+            <i class="bi bi-graph-down me-2"></i>PDP Analysis
+        </a>
+        <a href="#" class="btn btn-secondary me-2" onclick="alert('Coming soon!')">
+            <i class="bi bi-shuffle me-2"></i>Permutation
+        </a>
+        <a href="#" class="btn btn-danger" onclick="alert('Coming soon!')">
+            <i class="bi bi-graph-up-arrow me-2"></i>Sensitivity
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Available Explainability Analyses</h5>
+    </div>
+    <div class="card-body">
+        <div class="text-center py-5">
+            <i class="bi bi-lightbulb display-1 text-muted mb-3"></i>
+            <h5 class="text-muted">No explainability analyses available</h5>
+            <p class="text-muted">Create your first model explanation to get started</p>
+            <div class="mt-3">
+                <a href="#" class="btn btn-success me-2 mb-2" onclick="alert('Coming soon!')">
+                    <i class="bi bi-bar-chart me-2"></i>Feature Importance
+                </a>
+                <a href="#" class="btn btn-primary me-2 mb-2" onclick="alert('Coming soon!')">
+                    <i class="bi bi-puzzle me-2"></i>SHAP Analysis
+                </a>
+                <a href="#" class="btn btn-warning me-2 mb-2" onclick="alert('Coming soon!')">
+                    <i class="bi bi-search me-2"></i>LIME Explain
+                </a>
+                <a href="#" class="btn btn-info me-2 mb-2" onclick="alert('Coming soon!')">
+                    <i class="bi bi-graph-down me-2"></i>PDP Analysis
+                </a>
+                <a href="#" class="btn btn-secondary me-2 mb-2" onclick="alert('Coming soon!')">
+                    <i class="bi bi-shuffle me-2"></i>Permutation
+                </a>
+                <a href="#" class="btn btn-danger mb-2" onclick="alert('Coming soon!')">
+                    <i class="bi bi-graph-up-arrow me-2"></i>Sensitivity
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">What is Model Explainability?</h5>
+            </div>
+            <div class="card-body">
+                <p>Model explainability helps you understand how your simulation and surrogate models make predictions. It provides insights into which parameters have the most impact on outputs and how different features contribute to specific predictions.</p>
+                
+                <h6 class="mt-3"><i class="bi bi-check-circle text-success me-2"></i>Benefits</h6>
+                <ul>
+                    <li>Build trust in model predictions and decisions</li>
+                    <li>Identify most influential process parameters</li>
+                    <li>Validate model behavior against domain knowledge</li>
+                    <li>Debug and improve model performance</li>
+                    <li>Ensure compliance with regulatory requirements</li>
+                    <li>Gain deeper insights into process behavior</li>
+                </ul>
+
+                <h6 class="mt-3"><i class="bi bi-info-circle text-info me-2"></i>Explanation Types</h6>
+                <div class="row">
+                    <div class="col-12">
+                        <div class="border rounded p-3 mb-2">
+                            <h6 class="text-info mb-2"><i class="bi bi-globe me-2"></i>Global Explanations</h6>
+                            <p class="small mb-0">Understand overall model behavior across all predictions. Shows which features are generally most important and how they affect the model output on average.</p>
+                        </div>
+                        <div class="border rounded p-3">
+                            <h6 class="text-warning mb-2"><i class="bi bi-geo-alt me-2"></i>Local Explanations</h6>
+                            <p class="small mb-0">Explain individual predictions by showing how each feature contributed to that specific prediction. Useful for understanding model decisions case-by-case.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Available Explainability Methods</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    <div class="list-group-item">
+                        <h6 class="mb-1"><s>Feature Importance Analysis</s> <span class="badge bg-secondary">Coming Soon</span></h6>
+                        <p class="mb-1 small text-muted text-muted-lighter">Identify which input parameters have the most significant impact on simulation outputs using various importance metrics.</p>
+                    </div>
+                    <div class="list-group-item">
+                        <h6 class="mb-1"><s>SHAP (SHapley Additive exPlanations)</s> <span class="badge bg-secondary">Coming Soon</span></h6>
+                        <p class="mb-1 small text-muted text-muted-lighter">Unified framework for interpreting predictions by computing feature contributions based on game theory.</p>
+                    </div>
+                    <div class="list-group-item">
+                        <h6 class="mb-1"><s>LIME (Local Interpretable Model-agnostic Explanations)</s> <span class="badge bg-secondary">Coming Soon</span></h6>
+                        <p class="mb-1 small text-muted text-muted-lighter">Explain individual predictions by learning local interpretable models around specific instances.</p>
+                    </div>
+                    <div class="list-group-item">
+                        <h6 class="mb-1"><s>Partial Dependence Plots (PDP)</s> <span class="badge bg-secondary">Coming Soon</span></h6>
+                        <p class="mb-1 small text-muted text-muted-lighter">Visualize the marginal effect of individual features on predicted outcomes while averaging out other features.</p>
+                    </div>
+                    <div class="list-group-item">
+                        <h6 class="mb-1"><s>Permutation Importance</s> <span class="badge bg-secondary">Coming Soon</span></h6>
+                        <p class="mb-1 small text-muted text-muted-lighter">Measure feature importance by observing how model performance changes when feature values are randomly shuffled.</p>
+                    </div>
+                    <div class="list-group-item">
+                        <h6 class="mb-1"><s>Sensitivity Analysis</s> <span class="badge bg-secondary">Coming Soon</span></h6>
+                        <p class="mb-1 small text-muted text-muted-lighter">Analyze how parameter variations affect model outputs through global and local sensitivity methods.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>    
+</div>
+{% endblock %}

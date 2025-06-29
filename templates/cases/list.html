@@ -1,0 +1,557 @@
+{% extends "base.html" %}
+
+{% block title %}Cases | Simulation Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-folder2-open text-primary me-2"></i>Simulation Cases</h1>
+    <a href="{{ url_for('cases.new_case') }}" class="btn btn-primary">
+        <i class="bi bi-plus-circle-fill"></i> New Case
+    </a>
+</div>
+
+{% for message in get_flashed_messages(with_categories=true) %}
+<div class="alert alert-{{ message[0] }} alert-dismissible fade show" role="alert">
+    {{ message[1] }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endfor %}
+
+{% if cases %}
+<div class="card shadow-sm mb-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Available Simulation Cases</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Description</th>
+                        <th>Driver</th>
+                        <th>Created</th>
+                        <th>Updated</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for case in cases %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-file-earmark-code text-primary fs-4 me-2"></i>
+                                <span class="fw-medium">{{ case.name }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="text-muted">{{ case.description|truncate(50) }}</span>
+                        </td>
+                        <td>
+                            {% if case.driver_type == 'hysys' %}
+                                <span class="badge bg-primary text-white rounded-pill px-3 py-2">
+                                    <i class="bi bi-cpu me-1"></i> HYSYS
+                                </span>
+                            {% elif case.driver_type == 'aspen' %}
+                                <span class="badge bg-success text-white rounded-pill px-3 py-2">
+                                    <i class="bi bi-gear me-1"></i> Aspen
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary text-white rounded-pill px-3 py-2">
+                                    <i class="bi bi-code-square me-1"></i> {{ case.driver_type }}
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center text-muted">
+                                <i class="bi bi-calendar3 me-1"></i>
+                                <span>{{ case.created_at.strftime('%d %b %Y') }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            {% if case.updated_at %}
+                                <div class="d-flex align-items-center text-muted">
+                                    <i class="bi bi-arrow-clockwise me-1"></i>
+                                    <span>{{ case.updated_at.strftime('%d %b %Y') }}</span>
+                                </div>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="d-flex justify-content-center gap-2">
+                                <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="btn btn-sm btn-outline-primary" data-bs-toggle="tooltip" title="View Details">
+                                    <i class="bi bi-eye-fill"></i>
+                                </a>
+                                <a href="{{ url_for('simulations.run_simulation', case_id=case.id) }}" class="btn btn-sm btn-outline-success" data-bs-toggle="tooltip" title="Run Simulation">
+                                    <i class="bi bi-play-fill"></i>
+                                </a>
+                                <a href="{{ url_for('simulations.simulation_results', case_id=case.id) }}" class="btn btn-sm btn-outline-info" data-bs-toggle="tooltip" title="View Results">
+                                    <i class="bi bi-graph-up"></i>
+                                </a>
+                                <a href="{{ url_for('cases.edit_case', case_id=case.id) }}" class="btn btn-sm btn-outline-secondary" data-bs-toggle="tooltip" title="Edit Case">
+                                    <i class="bi bi-pencil-fill"></i>
+                                </a>
+                                <button class="btn btn-sm btn-outline-info view-parameters" data-case-id="{{ case.id }}" data-case-name="{{ case.name }}" data-bs-toggle="tooltip" title="View Parameters">
+                                    <i class="bi bi-list-check"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger delete-case" data-case-id="{{ case.id }}" data-case-name="{{ case.name }}" data-bs-toggle="tooltip" title="Delete Case">
+                                    <i class="bi bi-trash-fill"></i>
+                                </button>
+                            </div>
+                        </td>                        
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card shadow-sm mb-4">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-folder2-open text-muted" style="font-size: 4rem;"></i>
+        <h4 class="mt-3">No cases found</h4>
+        <p class="text-muted">Get started by creating your first simulation case.</p>
+        <a href="{{ url_for('cases.new_case') }}" class="btn btn-primary mt-2">
+            <i class="bi bi-plus-circle-fill me-1"></i> Create your first case
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">What are Flowsheet Simulations?</h5>
+            </div>
+            <div class="card-body">
+                <p>Flowsheet simulations model complex process systems to predict behavior, optimize performance, and analyze operational scenarios. Our platform enables you to run simulations, create surrogate models, and calibrate your models to match real-world data.</p>
+                
+                <h6 class="mt-3"><i class="bi bi-check-circle text-success me-2"></i>Benefits</h6>
+                <ul>
+                    <li>Analyze process behavior under different operating conditions</li>
+                    <li>Create data-driven surrogate models for rapid decision-making</li>
+                    <li>Calibrate simulation parameters to match experimental data</li>
+                    <li>Identify optimal operating parameters for your processes</li>
+                    <li>Understand parameter relationships and sensitivities</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Available Capabilities</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    <div class="list-group-item">
+                        <h6 class="mb-1">Run Simulation <span class="badge bg-success">Available</span></h6>
+                        <p class="mb-1 small text-muted">Execute simulations with different parameter sets to analyze process behavior.</p>
+                        <a href="{{ url_for('simulations.run_simulation') }}" class="btn btn-sm btn-outline-primary mt-2">
+                            <i class="bi bi-play-fill me-1"></i> Run Simulation
+                        </a>
+                    </div>
+                    <div class="list-group-item">
+                        <h6 class="mb-1">Create Surrogate Model <span class="badge bg-success">Available</span></h6>
+                        <p class="mb-1 small text-muted">Build machine learning models that approximate simulation outputs for rapid analysis.</p>
+                        <a href="{{ url_for('surrogate.surrogate_index') }}" class="btn btn-sm btn-outline-primary mt-2">
+                            <i class="bi bi-cpu me-1"></i> Create Surrogate Model
+                        </a>
+                    </div>
+                    <div class="list-group-item">
+                        <h6 class="mb-1">Calibrate Simulation <span class="badge bg-success">Available</span></h6>
+                        <p class="mb-1 small text-muted">Tune simulation parameters to match experimental or plant data.</p>
+                        <a href="{{ url_for('calibration.index') }}" class="btn btn-sm btn-outline-primary mt-2">
+                            <i class="bi bi-sliders me-1"></i> Calibrate Simulation
+                        </a>
+                    </div>
+                    <div class="list-group-item">
+                        <h6 class="mb-1"><s>Optimize Process</s> <span class="badge bg-secondary">Coming Soon</span></h6>
+                        <p class="mb-1 small text-muted text-muted-lighter">Find optimal parameter values to maximize efficiency or minimize costs.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>    
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    Confirm Deletion
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the case "<strong><span id="caseName"></span></strong>"?</p>
+                <p class="text-danger mb-0">
+                    <i class="bi bi-exclamation-circle me-1"></i>
+                    This action cannot be undone.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i> Cancel
+                </button>
+                <form id="deleteForm">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash-fill me-1"></i> Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Parameters Modal -->
+<div class="modal fade" id="parametersModal" tabindex="-1" aria-labelledby="parametersModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="parametersModalLabel">
+                    <i class="bi bi-list-check me-2"></i>
+                    Parameters for <span id="paramsCaseName"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="border-bottom pb-2 mb-3">Input Parameters</h6>
+                        <div id="inputParamsList" class="list-group mb-4">
+                            <div class="list-group-item text-center text-muted">Loading parameters...</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="border-bottom pb-2 mb-3">Output Parameters</h6>
+                        <div id="outputParamsList" class="list-group">
+                            <div class="list-group-item text-center text-muted">Loading parameters...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i> Close
+                </button>
+                <a id="editParametersBtn" href="#" class="btn btn-primary">
+                    <i class="bi bi-pencil-fill me-1"></i> Edit Parameters
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
+        });
+        
+        // Handle delete button clicks
+        const deleteButtons = document.querySelectorAll('.delete-case');
+        const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+        const caseNameSpan = document.getElementById('caseName');
+
+        let currentCaseId = null;
+
+        deleteButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                currentCaseId = this.getAttribute('data-case-id');
+                const caseName = this.getAttribute('data-case-name');
+                
+                caseNameSpan.textContent = caseName;
+                deleteModal.show();
+            });
+        });
+
+        // Handle the actual delete when modal form is submitted
+        document.getElementById('deleteForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            if (!currentCaseId) return;
+            
+            // Show loading state
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Deleting...';
+            submitBtn.disabled = true;
+            
+            fetch(`/cases/api/${currentCaseId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Close modal
+                deleteModal.hide();
+                
+                // Show success message
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-success alert-dismissible fade show';
+                alertDiv.innerHTML = `
+                    ${data.message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                `;
+                document.querySelector('.container').insertBefore(alertDiv, document.querySelector('h1').nextSibling);
+                
+                // Remove the deleted row from the table
+                const deletedRow = document.querySelector(`button[data-case-id="${currentCaseId}"]`).closest('tr');
+                if (deletedRow) {
+                    deletedRow.remove();
+                }
+                
+                // Check if table is now empty
+                const tableBody = document.querySelector('tbody');
+                if (tableBody && tableBody.children.length === 0) {
+                    location.reload(); // Reload to show "no cases" message
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                
+                // Show error message
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+                alertDiv.innerHTML = `
+                    Error deleting case. Please try again.
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                `;
+                document.querySelector('.container').insertBefore(alertDiv, document.querySelector('h1').nextSibling);
+            })
+            .finally(() => {
+                // Reset button state
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+                currentCaseId = null;
+            });
+        });
+        
+        // Handle view parameters button clicks
+        const viewParamsButtons = document.querySelectorAll('.view-parameters');
+        const parametersModal = new bootstrap.Modal(document.getElementById('parametersModal'));
+        const paramsCaseNameSpan = document.getElementById('paramsCaseName');
+        const inputParamsList = document.getElementById('inputParamsList');
+        const outputParamsList = document.getElementById('outputParamsList');
+        const editParametersBtn = document.getElementById('editParametersBtn');
+        
+        viewParamsButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const caseId = this.getAttribute('data-case-id');
+                const caseName = this.getAttribute('data-case-name');
+                
+                paramsCaseNameSpan.textContent = caseName;
+                editParametersBtn.href = `/parameters/configure/${caseId}`;
+                
+                // Show loading state
+                inputParamsList.innerHTML = '<div class="list-group-item text-center text-muted">Loading parameters...</div>';
+                outputParamsList.innerHTML = '<div class="list-group-item text-center text-muted">Loading parameters...</div>';
+                
+                // Fetch case parameters
+                fetch(`/cases/api/${caseId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        // Process input parameters
+                        let inputParamsHtml = '';
+                        let hasInputParams = false;
+                        
+                        if (data.parameters && data.parameters.InputParams) {
+                            // Process Spreadsheet inputs
+                            if (data.parameters.InputParams.Spreadsheet) {
+                                Object.entries(data.parameters.InputParams.Spreadsheet).forEach(([name, config]) => {
+                                    hasInputParams = true;
+                                    inputParamsHtml += `
+                                        <div class="list-group-item">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div>
+                                                    <h6 class="mb-1">${name}</h6>
+                                                    <p class="mb-1 small text-muted">
+                                                        <span class="badge bg-light text-dark me-1">Spreadsheet</span>
+                                                        ${config.SpreadsheetName}, Cell: ${config.Cell}
+                                                    </p>
+                                                </div>
+                                                ${config.UOM ? `<span class="badge bg-info">${config.UOM}</span>` : ''}
+                                            </div>
+                                        </div>
+                                    `;
+                                });
+                            }
+                            
+                            // Process MaterialStream inputs
+                            if (data.parameters.InputParams.MaterialStream) {
+                                Object.entries(data.parameters.InputParams.MaterialStream).forEach(([name, config]) => {
+                                    hasInputParams = true;
+                                    let paramDetails = '';
+                                    
+                                    if (config.ParameterType === 'Property') {
+                                        paramDetails = `Property: ${config.PropertyName}`;
+                                    } else {
+                                        paramDetails = `Type: ${config.ParameterType}`;
+                                        if (config.GetComponents && config.GetComponents.length) {
+                                            paramDetails += `, Components: ${config.GetComponents.length}`;
+                                        }
+                                    }
+                                    
+                                    inputParamsHtml += `
+                                        <div class="list-group-item">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div>
+                                                    <h6 class="mb-1">${name}</h6>
+                                                    <p class="mb-1 small text-muted">
+                                                        <span class="badge bg-light text-dark me-1">Material Stream</span>
+                                                        ${config.StreamName}, ${paramDetails}
+                                                    </p>
+                                                </div>
+                                                ${config.UOM ? `<span class="badge bg-info">${config.UOM}</span>` : ''}
+                                            </div>
+                                        </div>
+                                    `;
+                                });
+                            }
+                            
+                            // Process EnergyStream inputs
+                            if (data.parameters.InputParams.EnergyStream) {
+                                Object.entries(data.parameters.InputParams.EnergyStream).forEach(([name, config]) => {
+                                    hasInputParams = true;
+                                    inputParamsHtml += `
+                                        <div class="list-group-item">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div>
+                                                    <h6 class="mb-1">${name}</h6>
+                                                    <p class="mb-1 small text-muted">
+                                                        <span class="badge bg-light text-dark me-1">Energy Stream</span>
+                                                        ${config.StreamName}, Property: ${config.PropertyName || 'HeatFlow'}
+                                                    </p>
+                                                </div>
+                                                ${config.UOM ? `<span class="badge bg-info">${config.UOM}</span>` : ''}
+                                            </div>
+                                        </div>
+                                    `;
+                                });
+                            }
+                        }
+                        
+                        if (!hasInputParams) {
+                            inputParamsHtml = '<div class="list-group-item text-center text-muted">No input parameters configured</div>';
+                        }
+                        
+                        inputParamsList.innerHTML = inputParamsHtml;
+                        
+                        // Process output parameters
+                        let outputParamsHtml = '';
+                        let hasOutputParams = false;
+                        
+                        if (data.parameters && data.parameters.OutputParameters) {
+                            // Process Spreadsheet outputs
+                            if (data.parameters.OutputParameters.Spreadsheet) {
+                                Object.entries(data.parameters.OutputParameters.Spreadsheet).forEach(([name, config]) => {
+                                    hasOutputParams = true;
+                                    outputParamsHtml += `
+                                        <div class="list-group-item">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div>
+                                                    <h6 class="mb-1">${name}</h6>
+                                                    <p class="mb-1 small text-muted">
+                                                        <span class="badge bg-light text-dark me-1">Spreadsheet</span>
+                                                        ${config.SpreadsheetName}, Cell: ${config.Cell}
+                                                    </p>
+                                                </div>
+                                                ${config.UOM ? `<span class="badge bg-info">${config.UOM}</span>` : ''}
+                                            </div>
+                                        </div>
+                                    `;
+                                });
+                            }
+                            
+                            // Process MaterialStream outputs
+                            if (data.parameters.OutputParameters.MaterialStream) {
+                                Object.entries(data.parameters.OutputParameters.MaterialStream).forEach(([name, config]) => {
+                                    hasOutputParams = true;
+                                    let paramDetails = '';
+                                    
+                                    if (config.ParameterType === 'Property') {
+                                        paramDetails = `Property: ${config.PropertyName}`;
+                                    } else {
+                                        paramDetails = `Type: ${config.ParameterType}`;
+                                        if (config.GetComponents && config.GetComponents.length) {
+                                            paramDetails += `, Components: ${config.GetComponents.length}`;
+                                        }
+                                    }
+                                    
+                                    outputParamsHtml += `
+                                        <div class="list-group-item">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div>
+                                                    <h6 class="mb-1">${name}</h6>
+                                                        <p class="mb-1 small text-muted">
+                                                        <span class="badge bg-light text-dark me-1">Material Stream</span>
+                                                        ${config.StreamName}, ${paramDetails}
+                                                    </p>
+                                                </div>
+                                                ${config.UOM ? `<span class="badge bg-info">${config.UOM}</span>` : ''}
+                                            </div>
+                                        </div>
+                                    `;
+                                });
+                            }
+                            
+                            // Process EnergyStream outputs
+                            if (data.parameters.OutputParameters.EnergyStream) {
+                                Object.entries(data.parameters.OutputParameters.EnergyStream).forEach(([name, config]) => {
+                                    hasOutputParams = true;
+                                    outputParamsHtml += `
+                                        <div class="list-group-item">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div>
+                                                    <h6 class="mb-1">${name}</h6>
+                                                    <p class="mb-1 small text-muted">
+                                                        <span class="badge bg-light text-dark me-1">Energy Stream</span>
+                                                        ${config.StreamName}, Property: ${config.PropertyName || 'HeatFlow'}
+                                                    </p>
+                                                </div>
+                                                ${config.UOM ? `<span class="badge bg-info">${config.UOM}</span>` : ''}
+                                            </div>
+                                        </div>
+                                    `;
+                                });
+                            }
+                        }
+                        
+                        if (!hasOutputParams) {
+                            outputParamsHtml = '<div class="list-group-item text-center text-muted">No output parameters configured</div>';
+                        }
+                        
+                        outputParamsList.innerHTML = outputParamsHtml;
+                    })
+                    .catch(error => {
+                        inputParamsList.innerHTML = '<div class="list-group-item text-center text-danger">Error loading parameters</div>';
+                        outputParamsList.innerHTML = '<div class="list-group-item text-center text-danger">Error loading parameters</div>';
+                        console.error('Error fetching parameters:', error);
+                    });
+                
+                parametersModal.show();
+            });
+        });
+    });
+</script>
+{% endblock %}
+

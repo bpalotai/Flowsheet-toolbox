@@ -1,0 +1,971 @@
+{% extends "base.html" %}
+
+{% block title %}Batch Calibration Details | Simulation Platform{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="bi bi-collection text-primary me-2"></i>Batch Calibration Details</h1>
+        <div>
+            {% if calibration.file_path %}
+            <a href="{{ url_for('simulations.api_download_result', result_id=calibration.id) }}" class="btn btn-outline-primary me-2">
+                <i class="bi bi-download me-2"></i>Download Excel
+            </a>
+            {% endif %}
+            <a href="{{ url_for('calibration.index') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-2"></i>Back to Calibration
+            </a>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">Calibration Information</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <th style="width: 30%">Name:</th>
+                                <td>{{ calibration.name }}</td>
+                            </tr>
+                            <tr>
+                                <th>Case:</th>
+                                <td>
+                                    <a href="{{ url_for('cases.case_detail', case_id=calibration.case_id) }}">
+                                        {{ calibration.case.name }}
+                                    </a>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Method:</th>
+                                <td>
+                                    {% set method = calibration.simulation_type.replace('Batch Calibration (', '').replace(')', '') %}
+                                    <span class="badge bg-warning">Batch {{ method }}</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Created:</th>
+                                <td>{{ calibration.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            </tr>
+                            <tr>
+                                <th>Surrogate Used:</th>
+                                <td>
+                                    {% if configuration and configuration.use_surrogate %}
+                                        <span class="badge bg-success">Yes</span>
+                                        {% if configuration.is_inverse %}
+                                            <span class="badge bg-warning">Inverse Model</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="badge bg-secondary">No</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Total Rows:</th>
+                                <td><span class="badge bg-info">{{ summary.total_rows if summary else 0 }}</span></td>
+                            </tr>
+                            <tr>
+                                <th>Successful:</th>
+                                <td><span class="badge bg-success">{{ summary.successful_runs if summary else 0 }}</span></td>
+                            </tr>
+                            <tr>
+                                <th>Failed:</th>
+                                <td><span class="badge bg-danger">{{ summary.failed_runs if summary else 0 }}</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Calibration Results</h5>
+                    {% if chart_data and chart_data.parameters %}
+                    <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#visualizationModal">
+                        <i class="bi bi-graph-up me-1"></i>Visualizations
+                    </button>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="border-bottom pb-2">Average Metrics</h6>
+                            <table class="table table-sm">
+                                <tbody>
+                                    {% if batch_metrics %}
+                                        <tr>
+                                            <th>Mean Simulation Error:</th>
+                                            <td>
+                                                {% if batch_metrics.batch_sim_mean_rel_error %}
+                                                    {{ "%.2f"|format(batch_metrics.batch_sim_mean_rel_error) }}%
+                                                {% else %}
+                                                    N/A
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th>Std Simulation Error:</th>
+                                            <td>
+                                                {% if batch_metrics.batch_sim_std_rel_error %}
+                                                    {{ "%.2f"|format(batch_metrics.batch_sim_std_rel_error) }}%
+                                                {% else %}
+                                                    N/A
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% if batch_metrics.batch_surr_mean_rel_error %}
+                                        <tr>
+                                            <th>Mean Surrogate Error:</th>
+                                            <td>{{ "%.2f"|format(batch_metrics.batch_surr_mean_rel_error) }}%</td>
+                                        </tr>
+                                        {% endif %}
+                                        <tr>
+                                            <th>Success Rate:</th>
+                                            <td>
+                                                {% if summary and summary.total_rows > 0 %}
+                                                    {{ "%.1f"|format(summary.success_rate) }}%
+                                                {% else %}
+                                                    0%
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% else %}
+                                        <tr>
+                                            <td colspan="2" class="text-muted">No metrics available</td>
+                                        </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="border-bottom pb-2">Optimization Settings</h6>
+                            {% if configuration and configuration.pso_params %}
+                                <table class="table table-sm">
+                                    <tbody>
+                                        <tr>
+                                            <th>Particles:</th>
+                                            <td>{{ configuration.pso_params.particles }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Iterations:</th>
+                                            <td>{{ configuration.pso_params.iterations }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Cognitive (c1):</th>
+                                            <td>{{ configuration.pso_params.c1 }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Social (c2):</th>
+                                            <td>{{ configuration.pso_params.c2 }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Inertia (w):</th>
+                                            <td>{{ configuration.pso_params.w }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            {% else %}
+                                <p class="text-muted">No optimization settings available</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Batch Results Table -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title mb-0"><i class="bi bi-table me-2"></i>Batch Results</h5>
+        </div>
+        <div class="card-body">
+            {% if row_details %}
+            <div class="table-responsive">
+                <table class="table table-hover" id="batchResultsTable">
+                    <thead>
+                        <tr>
+                            <th>Row</th>
+                            <th>Status</th>
+                            <th>Iterations</th>
+                            <th>Final Cost</th>
+                            <th>Mean Error (%)</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for result in row_details %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>
+                                {% if result.success %}
+                                    <span class="badge bg-success">Success</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Failed</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if result.success %}
+                                    {% if result.get('iterations_run') is not none %}
+                                        {{ result.iterations_run }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if result.success and result.get('final_cost') is not none %}
+                                    {{ "%.6f"|format(result.final_cost) }}
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if result.success and result.overall_metrics and result.overall_metrics.sim_mean_rel_error %}
+                                    {% if result.overall_metrics.sim_mean_rel_error == float('inf') %}
+                                        <span class="text-warning">∞</span>
+                                    {% else %}
+                                        {{ "%.2f"|format(result.overall_metrics.sim_mean_rel_error) }}%
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    {% if result.success %}
+                                        <button class="btn btn-outline-info" onclick="showRowDetails({{ loop.index0 }})">
+                                            <i class="bi bi-info-circle"></i> Details
+                                        </button>
+                                        {% if result.get('costs_values') %}
+                                        <button class="btn btn-outline-primary" onclick="showRowConvergence({{ loop.index0 }})">
+                                            <i class="bi bi-graph-down"></i> Convergence
+                                        </button>
+                                        {% endif %}
+                                    {% else %}
+                                        <button class="btn btn-outline-danger" onclick="showRowError({{ loop.index0 }})">
+                                            <i class="bi bi-exclamation-triangle"></i> Error
+                                        </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-inbox display-1 text-muted"></i>
+                <h5 class="text-muted mt-3">No batch results available</h5>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Visualization Modal -->
+<div class="modal fade" id="visualizationModal" tabindex="-1" aria-labelledby="visualizationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="visualizationModalLabel">Batch Results Visualization</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Visualization Controls -->
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="parameterSelect" class="form-label">Parameter:</label>
+                        <select class="form-select" id="parameterSelect">
+                            {% if chart_data and chart_data.parameters %}
+                                {% for param in chart_data.parameters %}
+                                <option value="{{ param }}" {% if loop.first %}selected{% endif %}>{{ param }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="chartTypeSelect" class="form-label">Chart Type:</label>
+                        <select class="form-select" id="chartTypeSelect">
+                            <option value="comparison" selected>Target vs Results</option>
+                            <option value="error">Error Analysis</option>
+                            <option value="convergence">Convergence (Selected Row)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4" id="rowSelectDiv" style="display: none;">
+                        <label for="rowSelectViz" class="form-label">Select Row:</label>
+                        <select class="form-select" id="rowSelectViz">
+                            {% for i in range(1, (summary.total_rows if summary else 0) + 1) %}
+                            <option value="{{ i }}">Row {{ i }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Chart Container -->
+                <div style="height: 400px;">
+                    <canvas id="visualizationChart"></canvas>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Row Details Modal -->
+<div class="modal fade" id="rowDetailsModal" tabindex="-1" aria-labelledby="rowDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rowDetailsModalLabel">Row Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="rowDetailsModalBody">
+                <!-- Content will be populated by JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+    </div>
+
+<!-- Row Convergence Modal -->
+<div class="modal fade" id="rowConvergenceModal" tabindex="-1" aria-labelledby="rowConvergenceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rowConvergenceModalLabel">Convergence Analysis</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div style="height: 400px;">
+                    <canvas id="convergenceChart"></canvas>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Row Error Modal -->
+<div class="modal fade" id="rowErrorModal" tabindex="-1" aria-labelledby="rowErrorModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="rowErrorModalLabel">Error Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="rowErrorModalBody">
+                <!-- Content will be populated by JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Store batch results data for JavaScript access
+    const batchResults = {{ row_details | tojson | safe }};
+    const chartData = {{ chart_data | tojson | safe }};
+
+    // Initialize modals
+    const visualizationModal = new bootstrap.Modal(document.getElementById('visualizationModal'));
+    const rowDetailsModal = new bootstrap.Modal(document.getElementById('rowDetailsModal'));
+    const rowConvergenceModal = new bootstrap.Modal(document.getElementById('rowConvergenceModal'));
+    const rowErrorModal = new bootstrap.Modal(document.getElementById('rowErrorModal'));
+    
+    // Chart instances
+    let visualizationChart = null;
+    let convergenceChart = null;
+    
+    // Initialize DataTable for pagination
+    {% if row_details %}
+    $('#batchResultsTable').DataTable({
+        pageLength: 25,
+        order: [[0, 'asc']],
+        columnDefs: [
+            { orderable: false, targets: [5] } // Disable sorting on Actions column
+        ]
+    });
+    {% endif %}
+    
+    // Visualization controls
+    const parameterSelect = document.getElementById('parameterSelect');
+    const chartTypeSelect = document.getElementById('chartTypeSelect');
+    const rowSelectDiv = document.getElementById('rowSelectDiv');
+    const rowSelectViz = document.getElementById('rowSelectViz');
+    
+    if (parameterSelect && chartTypeSelect) {
+        parameterSelect.addEventListener('change', updateVisualization);
+        chartTypeSelect.addEventListener('change', function() {
+            if (this.value === 'convergence') {
+                rowSelectDiv.style.display = 'block';
+            } else {
+                rowSelectDiv.style.display = 'none';
+            }
+            updateVisualization();
+        });
+        
+        if (rowSelectViz) {
+            rowSelectViz.addEventListener('change', updateVisualization);
+        }
+    }
+    
+    function updateVisualization() {
+        const parameter = parameterSelect.value;
+        const chartType = chartTypeSelect.value;
+        const selectedRow = rowSelectViz ? parseInt(rowSelectViz.value) : 1;
+        
+        if (!parameter || !chartData) return;
+        
+        const ctx = document.getElementById('visualizationChart').getContext('2d');
+        
+        // Destroy existing chart if it exists
+        if (visualizationChart) {
+            visualizationChart.destroy();
+            visualizationChart = null;
+        }
+        
+        switch (chartType) {
+            case 'comparison':
+                createComparisonChart(ctx, parameter);
+                break;
+            case 'error':
+                createErrorChart(ctx, parameter);
+                break;
+            case 'convergence':
+                createConvergenceChart(ctx, selectedRow);
+                break;
+        }
+    }
+    
+    function createComparisonChart(ctx, parameter) {
+        const targetValues = chartData.target_values[parameter] || [];
+        const simulationValues = chartData.simulation_values[parameter] || [];
+        const surrogateValues = chartData.surrogate_values[parameter] || [];
+        const rows = chartData.rows || [];
+        
+        const datasets = [
+            {
+                label: 'Target',
+                data: targetValues,
+                borderColor: 'rgba(255, 99, 132, 1)',
+                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                tension: 0.1
+            },
+            {
+                label: 'Simulation',
+                data: simulationValues,
+                borderColor: 'rgba(54, 162, 235, 1)',
+                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                tension: 0.1
+            }
+        ];
+        
+        // Add surrogate data if available
+        if (surrogateValues.some(val => val !== null && val !== undefined)) {
+            datasets.push({
+                label: 'Surrogate',
+                data: surrogateValues,
+                borderColor: 'rgba(75, 192, 192, 1)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                tension: 0.1
+            });
+        }
+        
+        visualizationChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: rows,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        title: {
+                            display: true,
+                            text: parameter
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Row Number'
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: `${parameter} - Target vs Results Comparison`
+                    }
+                }
+            }
+        });
+    }
+    
+    function createErrorChart(ctx, parameter) {
+        const errorValues = chartData.error_data[parameter] || [];
+        const rows = chartData.rows || [];
+        
+        // Filter out infinite and null values for display
+        const filteredData = errorValues.map(val => {
+            if (val === null || val === undefined || val === Infinity || isNaN(val)) {
+                return null;
+            }
+            return val;
+        });
+        
+        visualizationChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: rows,
+                datasets: [{
+                    label: 'Relative Error (%)',
+                    data: filteredData,
+                    backgroundColor: filteredData.map(val => {
+                        if (val === null) return 'rgba(128, 128, 128, 0.5)';
+                        if (val < 1) return 'rgba(75, 192, 192, 0.8)';
+                        if (val < 5) return 'rgba(255, 206, 86, 0.8)';
+                        if (val < 10) return 'rgba(255, 159, 64, 0.8)';
+                        return 'rgba(255, 99, 132, 0.8)';
+                    }),
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Relative Error (%)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Row Number'
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: `${parameter} - Error Analysis`
+                    },
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+    
+    function createConvergenceChart(ctx, selectedRow) {
+        const result = batchResults[selectedRow - 1];
+        
+        console.log(`Creating convergence chart for row ${selectedRow}:`, result);
+        
+        // Destroy existing chart if it exists
+        if (convergenceChart) {
+            convergenceChart.destroy();
+            convergenceChart = null;
+        }
+
+        if (!result) {
+            console.error('No result found for row:', selectedRow);
+            return;
+        }
+        
+        if (!result.success) {
+            console.warn('Result was not successful for row:', selectedRow);
+            convergenceChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Row ${selectedRow} - Calibration Failed`
+                        }
+                    }
+                }
+            });
+            return;
+        }
+        
+        // Check for convergence data in different possible locations
+        let costs = null;
+        
+        if (result.costs_curve) {
+            costs = result.costs_curve;
+        } else if (result.costs_values) {
+            costs = result.costs_values;
+        } else if (result.convergence_data) {
+            costs = result.convergence_data;
+        } else if (result.costs) {
+            costs = result.costs;
+        }
+        
+        console.log('Costs data found:', costs);
+        
+        if (!costs || !Array.isArray(costs) || costs.length === 0) {
+            console.warn('No convergence data available for row:', selectedRow);
+            convergenceChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Row ${selectedRow} - No Convergence Data Available`
+                        }
+                    }
+                }
+            });
+            return;
+        }
+        
+        const iterations = [];
+        const costValues = [];
+        
+        costs.forEach((iterationCosts, index) => {
+            iterations.push(index + 1);
+            
+            if (Array.isArray(iterationCosts)) {
+                // If it's an array of particle costs, take the minimum
+                const validCosts = iterationCosts.filter(cost => 
+                    typeof cost === 'number' && 
+                    !isNaN(cost) && 
+                    isFinite(cost)
+                );
+                if (validCosts.length > 0) {
+                    costValues.push(Math.min(...validCosts));
+                } else {
+                    costValues.push(null);
+                }
+            } else if (typeof iterationCosts === 'number' && !isNaN(iterationCosts) && isFinite(iterationCosts)) {
+                // If it's a single number
+                costValues.push(iterationCosts);
+            } else {
+                // Invalid data
+                costValues.push(null);
+            }
+        });
+        
+        console.log('Processed convergence data:', { iterations, costValues });
+        
+        if (costValues.filter(v => v !== null).length === 0) {
+            console.warn('No valid cost values found');
+            convergenceChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Row ${selectedRow} - Invalid Convergence Data`
+                        }
+                    }
+                }
+            });
+            return;
+        }
+        
+        convergenceChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: iterations,
+                datasets: [{
+                    label: 'Best Cost',
+                    data: costValues,
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    tension: 0.1,
+                    fill: true,
+                    spanGaps: true // This will connect points even if some are null
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        title: {
+                            display: true,
+                            text: 'Cost Function Value'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Iteration'
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: `Row ${selectedRow} - PSO Convergence Analysis`
+                    },
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+
+    
+    // Global functions for row actions
+    window.showRowDetails = function(resultIndex) {
+        const result = batchResults[resultIndex];
+        if (!result || !result.success) return;
+        
+        let content = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Input Data</h6>
+                    <table class="table table-sm table-bordered">
+                        <tbody>
+        `;
+        
+        if (result.input_data) {
+            Object.entries(result.input_data).forEach(([key, value]) => {
+                if (key !== 'Unnamed: 0' && key !== 'timestamp') {
+                    content += `<tr><td><strong>${key}</strong></td><td>${value}</td></tr>`;
+                }
+            });
+        }
+        
+        content += `
+                        </tbody>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h6>Calibrated Parameters</h6>
+                    <table class="table table-sm table-bordered">
+                        <tbody>
+        `;
+        
+        if (result.calibration_result) {
+            Object.entries(result.calibration_result).forEach(([key, value]) => {
+                const formattedValue = typeof value === 'number' ? value.toFixed(6) : value;
+                content += `<tr><td><strong>${key}</strong></td><td>${formattedValue}</td></tr>`;
+            });
+        }
+        
+        content += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+        
+        if (result.metrics) {
+            content += `
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <h6>Accuracy Metrics</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Parameter</th>
+                                        <th>Target</th>
+                                        <th>Simulation</th>
+                                        <th>Abs Error</th>
+                                        <th>Rel Error (%)</th>
+            `;
+            
+            // Check if surrogate results are available
+            const hasSurrogateResults = Object.values(result.metrics).some(m => m.surrogate_value !== undefined);
+            if (hasSurrogateResults) {
+                content += `<th>Surrogate</th><th>Surr Rel Error (%)</th>`;
+            }
+            
+            content += `
+                                    </tr>
+                                </thead>
+                                <tbody>
+            `;
+            
+            Object.entries(result.metrics).forEach(([param, metrics]) => {
+                const relError = metrics.sim_relative_error === Infinity ? '∞' : metrics.sim_relative_error.toFixed(2) + '%';
+                
+                content += `
+                    <tr>
+                        <td><strong>${param}</strong></td>
+                        <td>${metrics.true_value.toFixed(6)}</td>
+                        <td>${metrics.simulation_value.toFixed(6)}</td>
+                        <td>${metrics.sim_absolute_error.toFixed(6)}</td>
+                        <td>${relError}</td>
+                `;
+                
+                if (hasSurrogateResults && metrics.surrogate_value !== undefined) {
+                    const surrRelError = metrics.surr_relative_error === Infinity ? '∞' : metrics.surr_relative_error.toFixed(2) + '%';
+                    content += `
+                        <td>${metrics.surrogate_value.toFixed(6)}</td>
+                        <td>${surrRelError}</td>
+                    `;
+                } else if (hasSurrogateResults) {
+                    content += `<td>N/A</td><td>N/A</td>`;
+                }
+                
+                content += `</tr>`;
+            });
+            
+            content += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        document.getElementById('rowDetailsModalBody').innerHTML = content;
+        document.getElementById('rowDetailsModalLabel').textContent = `Row ${resultIndex + 1} - Detailed Results`;
+        rowDetailsModal.show();
+            };
+    
+    window.showRowConvergence = function(resultIndex) {
+        console.log('showRowConvergence called with index:', resultIndex);
+        const result = batchResults[resultIndex];
+        
+        if (!result) {
+            console.error('No result found for index:', resultIndex);
+            return;
+        }
+        
+        if (!result.success) {
+            console.warn('Result was not successful');
+            return;
+        }
+        
+        console.log('Result data:', {
+            has_costs_curve: !!result.costs_curve,
+            has_costs_values: !!result.costs_values,
+            costs_curve_type: typeof result.costs_curve,
+            costs_curve_length: result.costs_curve ? result.costs_curve.length : 0
+        });
+        
+        document.getElementById('rowConvergenceModalLabel').textContent = `Row ${resultIndex + 1} - Convergence Analysis`;
+        
+        // Show modal first
+        rowConvergenceModal.show();
+        
+        // Wait for modal to be shown before creating chart
+        setTimeout(() => {
+            const canvas = document.getElementById('convergenceChart');
+            if (!canvas) {
+                console.error('Convergence chart canvas not found');
+                return;
+            }
+            
+            const ctx = canvas.getContext('2d');
+            
+            if (convergenceChart) {
+                convergenceChart.destroy();
+            }
+            
+            createConvergenceChart(ctx, resultIndex + 1);
+        }, 300);
+    };
+
+    
+    window.showRowError = function(resultIndex) {
+        const result = batchResults[resultIndex];
+        if (!result || result.success) return;
+        
+        let content = `
+            <div class="alert alert-danger">
+                <h6><i class="bi bi-exclamation-triangle me-2"></i>Error Message</h6>
+                <p class="mb-0">${result.error || 'Unknown error occurred during calibration'}</p>
+            </div>
+        `;
+        
+        if (result.input_data) {
+            content += `
+                <h6>Input Data (Row ${resultIndex + 1})</h6>
+                <table class="table table-sm table-bordered">
+                    <tbody>
+            `;
+            
+            Object.entries(result.input_data).forEach(([key, value]) => {
+                if (key !== 'Unnamed: 0' && key !== 'timestamp') {
+                    content += `<tr><td><strong>${key}</strong></td><td>${value}</td></tr>`;
+                }
+            });
+            
+            content += `
+                    </tbody>
+                </table>
+            `;
+        }
+        
+        document.getElementById('rowErrorModalBody').innerHTML = content;
+        document.getElementById('rowErrorModalLabel').textContent = `Row ${resultIndex + 1} - Error Details`;
+        rowErrorModal.show();
+    };
+    
+    // Initialize visualization when modal is shown
+    document.getElementById('visualizationModal').addEventListener('shown.bs.modal', function () {
+        if (chartData && chartData.parameters && chartData.parameters.length > 0) {
+            updateVisualization();
+        }
+    });
+    
+    // Clean up charts when modals are hidden
+    document.getElementById('visualizationModal').addEventListener('hidden.bs.modal', function () {
+        if (visualizationChart) {
+            visualizationChart.destroy();
+            visualizationChart = null;
+        }
+    });
+    
+    document.getElementById('rowConvergenceModal').addEventListener('hidden.bs.modal', function () {
+        if (convergenceChart) {
+            convergenceChart.destroy();
+            convergenceChart = null;
+        }
+    });
+});
+</script>
+{% endblock %}
+
+

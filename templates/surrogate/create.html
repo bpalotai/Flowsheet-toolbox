@@ -1,0 +1,1215 @@
+{% extends "base.html" %}
+
+{% block title %}Create Surrogate Model | Simulation Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-cpu text-primary me-2"></i>Create Surrogate Model</h1>
+    <a href="{{ url_for('surrogate.surrogate_index') }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Models
+    </a>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Model Configuration</h5>
+            </div>
+            <div class="card-body">
+                <form id="surrogateModelForm">
+                    <div class="mb-3">
+                        <label for="caseSelect" class="form-label">Select Case</label>
+                        <select class="form-select" id="caseSelect" name="case_id" required>
+                            <option value="">-- Select a case --</option>
+                            {% for case in cases %}
+                            <option value="{{ case.id }}">{{ case.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="modelName" class="form-label">Model Name</label>
+                        <input type="text" class="form-control" id="modelName" name="model_name" placeholder="Enter a descriptive name" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="modelType" class="form-label">Model Type</label>
+                        <select class="form-select" id="modelType" name="model_type" required>
+                            <option value="random_forest">Random Forest</option>
+                            <option value="neural_network">Neural Network</option>
+                            <!--<option value="gaussian_process">Gaussian Process</option>-->
+                            <!---<option value="polynomial">Polynomial Regression</option>-->
+                            <!---<option value="svr">Support Vector Regression</option>-->
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="inverseModelCheck" name="is_inverse_model" value="true">
+                            <label class="form-check-label" for="inverseModelCheck">
+                                Create Inverse Model
+                            </label>
+                            <div class="form-text">
+                                Inverse models swap input and output parameters, allowing you to predict inputs from outputs.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="trainingData" class="form-label">Training Data Source</label>
+                        <select class="form-select" id="trainingData" name="training_data_source" required>
+                            <option value="">-- Select a data source --</option>
+                            <option value="batch_results">Use Existing Batch Results</option>
+                            <option value="upload">Upload Training Data</option>
+                        </select>
+                        <div id="samplingHint" class="form-text mt-2 d-none">
+                            <i class="bi bi-info-circle text-primary me-1"></i>
+                            To generate new samples, please use the 
+                            <a href="{{ url_for('sampling.sampling_index') }}" target="_blank">Sampling Tool</a> 
+                            first, then select the batch results here.
+                        </div>
+                    </div>
+                    
+                    <div id="samplingOptions" class="mb-3" style="display: none;">
+                        <label for="numSamples" class="form-label">Number of Samples</label>
+                        <input type="number" class="form-control" id="numSamples" name="num_samples" min="10" max="1000" value="100">
+                    </div>
+                    
+                    <div id="batchOptions" class="mb-3" style="display: none;">
+                        <label for="batchSelect" class="form-label">Select Batch Result</label>
+                        <select class="form-select" id="batchSelect" name="batch_id">
+                            <option value="">-- Select batch result --</option>
+                            <!-- Batch options will be populated dynamically -->
+                        </select>
+                    </div>
+                    
+                    <div id="uploadOptions" class="mb-3" style="display: none;">
+                        <label for="dataFile" class="form-label">Upload Data File</label>
+                        <input type="file" class="form-control" id="dataFile" name="data_file" accept=".csv,.xlsx">
+                        <div class="form-text">Upload CSV or Excel file with input and output data</div>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="button" id="configureParamsBtn" class="btn btn-primary" disabled>
+                            <i class="bi bi-sliders me-2"></i>Configure Parameters
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Surrogate Modeling Overview</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h5><i class="bi bi-lightbulb me-2"></i>What are Surrogate Models?</h5>
+                    <p>Surrogate models (also known as metamodels or reduced-order models) are approximations of more complex simulation models. They provide fast predictions of simulation outputs without running the full simulation.</p>
+                </div>
+                <div class="alert alert-primary">
+                    <h5><i class="bi bi-info-circle me-2"></i>Training Data</h5>
+                    <p>To create a surrogate model, you need training data. You can:</p>
+                    <ul>
+                        <li>Use the <a href="{{ url_for('sampling.sampling_index') }}" target="_blank">Sampling Tool</a> to generate and run simulation samples</li>
+                        <li>Select existing batch simulation results</li>
+                        <li>Upload your own training data file</li>
+                    </ul>
+                </div>
+                
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h5 class="card-title"><i class="bi bi-check-circle text-success me-2"></i>Benefits</h5>
+                                <ul>
+                                    <li>Significantly faster than full simulations</li>
+                                    <li>Enable rapid design space exploration</li>
+                                    <li>Support optimization and uncertainty analysis</li>
+                                    <li>Provide insights into parameter relationships</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h5 class="card-title"><i class="bi bi-gear-wide-connected text-primary me-2"></i>Process</h5>
+                                <ol>
+                                    <li>Generate training data from simulations</li>
+                                    <li>Select input and output parameters</li>
+                                    <li>Choose and train a surrogate model</li>
+                                    <li>Validate model accuracy</li>
+                                    <li>Use model for predictions</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="text-center py-3">
+                    <i class="bi bi-diagram-3 display-1 text-muted"></i>
+                    <p class="text-muted mt-2">Configure your surrogate model using the options on the left</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row" id="modelConfigSection" style="display: none;">
+    <div class="col-12">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Parameter Configuration</h5>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="selectAllParamsBtn">
+                    <i class="bi bi-check-all me-1"></i>Select All
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="mb-3">Input Parameters</h6>
+                        <div class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">
+                            <div id="inputParamsList">
+                                <div class="text-center py-3">
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <span class="ms-2">Loading parameters...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="mb-3">Output Parameters</h6>
+                        <div class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">
+                            <div id="outputParamsList">
+                                <div class="text-center py-3">
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <span class="ms-2">Loading parameters...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <h6 class="mb-3">Advanced Model Settings</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="testSize" class="form-label">Test Set Size (%)</label>
+                                <input type="range" class="form-range" id="testSize" name="test_size" min="10" max="40" value="20">
+                                <div class="d-flex justify-content-between">
+                                    <span class="text-muted">10%</span>
+                                    <span id="testSizeValue" class="text-primary">20%</span>
+                                    <span class="text-muted">40%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="randomSeed" class="form-label">Random Seed</label>
+                                <input type="number" class="form-control" id="randomSeed" name="random_seed" value="42">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="modelSpecificSettings">
+                        <!-- Model-specific settings will be loaded here -->
+                    </div>
+                </div>
+                
+                <div class="d-flex justify-content-end mt-4">
+                    <button type="button" class="btn btn-secondary me-2" id="backToBasicBtn">
+                        <i class="bi bi-arrow-left me-2"></i>Back
+                    </button>
+                    <button type="button" class="btn btn-success" id="trainModelBtn">
+                        <i class="bi bi-play-fill me-2"></i>Train Model
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row" id="trainingSection" style="display: none;">
+    <div class="col-12">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Model Training</h5>
+            </div>
+            <div class="card-body">
+                <div id="trainingProgress">
+                    <h6 class="mb-3">Training Progress</h6>
+                    <div class="progress mb-3">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%" id="trainingProgressBar"></div>
+                    </div>
+                    <p id="trainingStatusText" class="text-center">Initializing training...</p>
+                </div>
+                
+                <div id="trainingResults" style="display: none;">
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle-fill me-2"></i>
+                        <span id="trainingSuccessMessage">Model trained successfully!</span>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-header">
+                                    <h6 class="card-title mb-0">Model Performance</h6>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-sm">
+                                        <tbody>
+                                            <tr>
+                                                <th>R² Score (Test Set)</th>
+                                                <td id="r2Score">-</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Mean Absolute Error</th>
+                                                <td id="maeScore">-</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Root Mean Squared Error</th>
+                                                <td id="rmseScore">-</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Training Time</th>
+                                                <td id="trainingTime">-</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-header">
+                                    <h6 class="card-title mb-0">Model Information</h6>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-sm">
+                                        <tbody>
+                                            <tr>
+                                                <th>Model Type</th>
+                                                <td id="modelTypeInfo">-</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Input Parameters</th>
+                                                <td id="inputParamsCount">-</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Output Parameters</th>
+                                                <td id="outputParamsCount">-</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Training Samples</th>
+                                                <td id="trainingSamplesCount">-</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end mt-3">
+                        <button type="button" class="btn btn-info me-2" id="downloadModelBtn">
+                            <i class="bi bi-download me-2"></i>Download Model
+                        </button>
+                        <button type="button" class="btn btn-primary" id="useModelBtn">
+                            <i class="bi bi-lightning-charge me-2"></i>Use Model
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Component Parameters Modal -->
+<div class="modal fade" id="parameterModal" tabindex="-1" aria-labelledby="parameterModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="parameterModalLabel">Configure Components</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="selectAllComponents">
+                        <label class="form-check-label" for="selectAllComponents">
+                            Select All Components
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px;"></th>
+                                <th>Component</th>
+                                <th>Type</th>
+                            </tr>
+                        </thead>
+                        <tbody id="componentsList">
+                            <!-- Components will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveComponentsBtn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // DOM elements
+    const caseSelect = document.getElementById('caseSelect');
+    const modelName = document.getElementById('modelName');
+    const modelType = document.getElementById('modelType');
+    const trainingData = document.getElementById('trainingData');
+    const samplingOptions = document.getElementById('samplingOptions');
+    const batchOptions = document.getElementById('batchOptions');
+    const uploadOptions = document.getElementById('uploadOptions');
+    const configureParamsBtn = document.getElementById('configureParamsBtn');
+    const modelConfigSection = document.getElementById('modelConfigSection');
+    const backToBasicBtn = document.getElementById('backToBasicBtn');
+    const trainModelBtn = document.getElementById('trainModelBtn');
+    const trainingSection = document.getElementById('trainingSection');
+    const testSize = document.getElementById('testSize');
+    const testSizeValue = document.getElementById('testSizeValue');
+    const inverseModelCheck = document.getElementById('inverseModelCheck');
+    
+    // Initialize parameter modal
+    const parameterModal = new bootstrap.Modal(document.getElementById('parameterModal'));
+
+    // Add this to the existing inverseModelCheck event listener
+    inverseModelCheck.addEventListener('change', function() {
+        // Find all h6 elements within .col-md-6 divs
+        const headers = document.querySelectorAll('.col-md-6 h6');
+        let inputParamsHeader = null;
+        let outputParamsHeader = null;
+        
+        // Find the specific headers by their text content
+        headers.forEach(header => {
+            if (header.textContent.includes('Input Parameters')) {
+                inputParamsHeader = header;
+            } else if (header.textContent.includes('Output Parameters')) {
+                outputParamsHeader = header;
+            }
+        });
+        
+        // Get the parameter containers
+        const inputParamsContainer = document.getElementById('inputParamsList').parentElement;
+        const outputParamsContainer = document.getElementById('outputParamsList').parentElement;
+        
+        if (this.checked) {
+            // Add visual indication for inverse model
+            if (inputParamsHeader) inputParamsHeader.innerHTML = 'Input Parameters <small class="text-warning">(Will be outputs in inverse model)</small>';
+            if (outputParamsHeader) outputParamsHeader.innerHTML = 'Output Parameters <small class="text-warning">(Will be inputs in inverse model)</small>';
+            
+            // Add a border to visually indicate the swap
+            inputParamsContainer.classList.add('border-warning');
+            outputParamsContainer.classList.add('border-warning');
+            
+            // Add a notice at the top of the parameter section
+            const notice = document.createElement('div');
+            notice.id = 'inverseModelNotice';
+            notice.className = 'alert alert-warning mb-3';
+            notice.innerHTML = '<strong>Inverse Model Mode:</strong> Input and output parameters will be swapped when training the model. Select parameters accordingly.';
+            document.getElementById('modelConfigSection').querySelector('.card-body').prepend(notice);
+        } else {
+            // Remove visual indications
+            if (inputParamsHeader) inputParamsHeader.innerHTML = 'Input Parameters';
+            if (outputParamsHeader) outputParamsHeader.innerHTML = 'Output Parameters';
+            
+            inputParamsContainer.classList.remove('border-warning');
+            outputParamsContainer.classList.remove('border-warning');
+            
+            // Remove the notice
+            const notice = document.getElementById('inverseModelNotice');
+            if (notice) notice.remove();
+        }
+    });
+
+
+
+    // Event listeners
+    caseSelect.addEventListener('change', function() {
+        configureParamsBtn.disabled = !this.value;
+    });
+    
+    trainingData.addEventListener('change', function() {
+        // Hide all options first
+        batchOptions.style.display = 'none';
+        uploadOptions.style.display = 'none';
+        document.getElementById('samplingHint').classList.add('d-none');
+        
+        // Show the selected option
+        if (this.value === 'batch_results') {
+            batchOptions.style.display = 'block';
+            if (caseSelect.value) {
+                loadBatchResults(caseSelect.value);
+            }
+        } else if (this.value === 'upload') {
+            uploadOptions.style.display = 'block';
+        }
+        
+        // Always show the sampling hint
+        document.getElementById('samplingHint').classList.remove('d-none');
+    });
+    
+    modelType.addEventListener('change', function() {
+        if (modelConfigSection.style.display !== 'none') {
+            loadModelSpecificSettings(this.value);
+        }
+    });
+    
+    configureParamsBtn.addEventListener('click', function() {
+        if (!validateBasicConfig()) return;
+        
+        // Hide basic config, show parameter config
+        document.querySelector('.row.mb-4').style.display = 'none';
+        modelConfigSection.style.display = 'block';
+        
+        // Load parameters for the selected case
+        loadCaseParameters(caseSelect.value);
+    });
+    
+    backToBasicBtn.addEventListener('click', function() {
+        // Show basic config, hide parameter config
+        document.querySelector('.row.mb-4').style.display = 'flex';
+        modelConfigSection.style.display = 'none';
+    });
+    
+    trainModelBtn.addEventListener('click', function() {
+        if (!validateParameterConfig()) return;
+        
+        // Hide parameter config, show training section
+        modelConfigSection.style.display = 'none';
+        trainingSection.style.display = 'block';
+        
+        // Start training process
+        startTraining();
+    });
+    
+    // Select all parameters button
+    document.getElementById('selectAllParamsBtn').addEventListener('click', function() {
+        const inputCheckboxes = document.querySelectorAll('#inputParamsList input[type="checkbox"]');
+        const outputCheckboxes = document.querySelectorAll('#outputParamsList input[type="checkbox"]');
+        
+        // Check if all are already selected
+        const allSelected = Array.from(inputCheckboxes).every(cb => cb.checked) && 
+                           Array.from(outputCheckboxes).every(cb => cb.checked);
+        
+        // Toggle selection
+        inputCheckboxes.forEach(cb => { cb.checked = !allSelected; });
+        outputCheckboxes.forEach(cb => { cb.checked = !allSelected; });
+        
+        // Update button text
+        this.innerHTML = allSelected ? 
+            '<i class="bi bi-check-all me-1"></i>Select All' : 
+            '<i class="bi bi-dash-circle me-1"></i>Deselect All';
+    });
+    
+    // Test size slider
+    testSize.addEventListener('input', function() {
+        testSizeValue.textContent = this.value + '%';
+    });
+    
+    // Function to validate basic configuration
+    function validateBasicConfig() {
+        if (!caseSelect.value) {
+            alert('Please select a case');
+            return false;
+        }
+        
+        if (!modelName.value) {
+            alert('Please enter a model name');
+            return false;
+        }
+        
+        if (!trainingData.value) {
+            alert('Please select a training data source');
+            return false;
+        }
+        
+        // Validate data source specific options
+        if (trainingData.value === 'batch_results') {
+            const batchSelect = document.getElementById('batchSelect');
+            if (!batchSelect.value) {
+                alert('Please select a batch result');
+                return false;
+            }
+        } else if (trainingData.value === 'upload') {
+            const dataFile = document.getElementById('dataFile');
+            if (!dataFile.files || dataFile.files.length === 0) {
+                alert('Please upload a data file');
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    // Function to validate parameter configuration
+    function validateParameterConfig() {
+        // Check if at least one input parameter is selected
+        const selectedInputs = document.querySelectorAll('#inputParamsList input[type="checkbox"]:checked');
+        if (selectedInputs.length === 0) {
+            alert('Please select at least one input parameter');
+            return false;
+        }
+        
+        // Check if at least one output parameter is selected
+        const selectedOutputs = document.querySelectorAll('#outputParamsList input[type="checkbox"]:checked');
+        if (selectedOutputs.length === 0) {
+            alert('Please select at least one output parameter');
+            return false;
+        }
+        
+        return true;
+    }
+    
+    // Function to load batch results for a case
+    function loadBatchResults(caseId) {
+        const batchSelect = document.getElementById('batchSelect');
+        batchSelect.innerHTML = '<option value="">-- Loading batch results... --</option>';
+        
+        fetch(`/surrogate/api/batch_results/${caseId}`)
+            .then(response => response.json())
+            .then(data => {
+                batchSelect.innerHTML = '<option value="">-- Select batch result --</option>';
+                
+                if (data.results && data.results.length > 0) {
+                    data.results.forEach(result => {
+                        const option = document.createElement('option');
+                        option.value = result.id;
+                        option.textContent = result.name;
+                        batchSelect.appendChild(option);
+                    });
+                } else {
+                    batchSelect.innerHTML = '<option value="">No batch results available</option>';
+                }
+            })
+            .catch(error => {
+                console.error('Error loading batch results:', error);
+                batchSelect.innerHTML = '<option value="">Error loading batch results</option>';
+            });
+    }
+    
+    // Function to load case parameters
+    function loadCaseParameters(caseId) {
+        const inputParamsList = document.getElementById('inputParamsList');
+        const outputParamsList = document.getElementById('outputParamsList');
+        
+        // Show loading indicators
+        inputParamsList.innerHTML = `
+            <div class="text-center py-3">
+                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <span class="ms-2">Loading input parameters...</span>
+            </div>
+        `;
+        
+        outputParamsList.innerHTML = `
+            <div class="text-center py-3">
+                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <span class="ms-2">Loading output parameters...</span>
+            </div>
+        `;
+        
+        // Fetch parameters from the API
+        fetch(`/surrogate/api/parameters/${caseId}`)
+            .then(response => response.json())
+            .then(data => {
+                // Clear loading indicators
+                inputParamsList.innerHTML = '';
+                outputParamsList.innerHTML = '';
+
+                // Update headers based on inverse model selection
+                const isInverseModel = inverseModelCheck.checked;
+                const inputHeader = document.querySelector('#modelConfigSection .col-md-6:first-child h6');
+                const outputHeader = document.querySelector('#modelConfigSection .col-md-6:last-child h6');
+                
+                if (isInverseModel) {
+                    inputHeader.innerHTML = 'Input Parameters <small class="text-muted">(Will be outputs in inverse model)</small>';
+                    outputHeader.innerHTML = 'Output Parameters <small class="text-muted">(Will be inputs in inverse model)</small>';
+                } else {
+                    inputHeader.innerHTML = 'Input Parameters';
+                    outputHeader.innerHTML = 'Output Parameters';
+                }
+
+                // Process input parameters
+                if (data.inputs && Object.keys(data.inputs).length > 0) {
+                    // Group parameters by type
+                    const groupedInputs = {};
+                    
+                    // Process each parameter type
+                    Object.entries(data.inputs).forEach(([paramType, params]) => {
+                        if (!groupedInputs[paramType]) {
+                            groupedInputs[paramType] = [];
+                        }
+                        
+                        // Add parameters to the group
+                        Object.entries(params).forEach(([paramName, paramConfig]) => {
+                            groupedInputs[paramType].push({
+                                name: paramName,
+                                config: paramConfig
+                            });
+                        });
+                    });
+                    
+                    // Render grouped input parameters
+                    Object.entries(groupedInputs).forEach(([groupName, params]) => {
+                        const groupDiv = document.createElement('div');
+                        groupDiv.className = 'mb-3';
+                        
+                        const groupTitle = document.createElement('h6');
+                        groupTitle.className = 'mb-2 text-muted';
+                        groupTitle.textContent = groupName;
+                        groupDiv.appendChild(groupTitle);
+                        
+                        params.forEach(param => {
+                            const isComponentParam = 
+                                groupName === 'MaterialStream' && 
+                                param.config.ParameterType && 
+                                param.config.ParameterType !== 'Property';
+                            
+                            if (isComponentParam) {
+                                // Component-based parameter (like mass fractions)
+                                const paramDiv = document.createElement('div');
+                                paramDiv.className = 'mb-2';
+                                
+                                const paramCheck = document.createElement('div');
+                                paramCheck.className = 'd-flex align-items-center';
+                                
+                                const checkbox = document.createElement('input');
+                                checkbox.type = 'checkbox';
+                                checkbox.className = 'form-check-input me-2';
+                                checkbox.id = `input_${param.name}`;
+                                checkbox.value = param.name;
+                                checkbox.dataset.paramType = groupName;
+                                checkbox.dataset.isComponent = 'true';
+                                
+                                const label = document.createElement('label');
+                                label.className = 'form-check-label';
+                                label.htmlFor = `input_${param.name}`;
+                                label.textContent = param.name;
+                                
+                                const configBtn = document.createElement('button');
+                                configBtn.type = 'button';
+                                configBtn.className = 'btn btn-sm btn-outline-secondary ms-auto';
+                                configBtn.innerHTML = '<i class="bi bi-gear-fill"></i>';
+                                configBtn.disabled = true;
+                                configBtn.dataset.paramName = param.name;
+                                configBtn.dataset.paramType = param.config.ParameterType || '';
+                                configBtn.dataset.streamName = param.config.StreamName || '';
+                                configBtn.addEventListener('click', function() {
+                                    openComponentModal(this.dataset.paramName, this.dataset.paramType, this.dataset.streamName);
+                                });
+                                
+                                // Enable config button when checkbox is checked
+                                checkbox.addEventListener('change', function() {
+                                    configBtn.disabled = !this.checked;
+                                });
+                                
+                                paramCheck.appendChild(checkbox);
+                                paramCheck.appendChild(label);
+                                paramCheck.appendChild(configBtn);
+                                paramDiv.appendChild(paramCheck);
+                                
+                                groupDiv.appendChild(paramDiv);
+                            } else {
+                                // Regular parameter
+                                const paramDiv = document.createElement('div');
+                                paramDiv.className = 'form-check mb-2';
+                                
+                                const checkbox = document.createElement('input');
+                                checkbox.type = 'checkbox';
+                                checkbox.className = 'form-check-input';
+                                checkbox.id = `input_${param.name}`;
+                                checkbox.value = param.name;
+                                checkbox.dataset.paramType = groupName;
+                                
+                                const label = document.createElement('label');
+                                label.className = 'form-check-label';
+                                label.htmlFor = `input_${param.name}`;
+                                label.textContent = param.name;
+                                
+                                paramDiv.appendChild(checkbox);
+                                paramDiv.appendChild(label);
+                                
+                                groupDiv.appendChild(paramDiv);
+                            }
+                        });
+                        
+                        inputParamsList.appendChild(groupDiv);
+                    });
+                } else {
+                    inputParamsList.innerHTML = '<div class="alert alert-warning mb-0">No input parameters available</div>';
+                }
+                
+                // Process output parameters
+                if (data.outputs && Object.keys(data.outputs).length > 0) {
+                    // Group parameters by type
+                    const groupedOutputs = {};
+                    
+                    // Process each parameter type
+                    Object.entries(data.outputs).forEach(([paramType, params]) => {
+                        if (!groupedOutputs[paramType]) {
+                            groupedOutputs[paramType] = [];
+                        }
+                        
+                        // Add parameters to the group
+                        Object.entries(params).forEach(([paramName, paramConfig]) => {
+                            groupedOutputs[paramType].push({
+                                name: paramName,
+                                config: paramConfig
+                            });
+                        });
+                    });
+                    
+                    // Render grouped output parameters
+                    Object.entries(groupedOutputs).forEach(([groupName, params]) => {
+                        const groupDiv = document.createElement('div');
+                        groupDiv.className = 'mb-3';
+                        
+                        const groupTitle = document.createElement('h6');
+                        groupTitle.className = 'mb-2 text-muted';
+                        groupTitle.textContent = groupName;
+                        groupDiv.appendChild(groupTitle);
+                        
+                        params.forEach(param => {
+                            const paramDiv = document.createElement('div');
+                            paramDiv.className = 'form-check mb-2';
+                            
+                            const checkbox = document.createElement('input');
+                            checkbox.type = 'checkbox';
+                            checkbox.className = 'form-check-input';
+                            checkbox.id = `output_${param.name}`;
+                            checkbox.value = param.name;
+                            checkbox.dataset.paramType = groupName;
+                            
+                            const label = document.createElement('label');
+                            label.className = 'form-check-label';
+                            label.htmlFor = `output_${param.name}`;
+                            label.textContent = param.name;
+                            
+                            paramDiv.appendChild(checkbox);
+                            paramDiv.appendChild(label);
+                            
+                            groupDiv.appendChild(paramDiv);
+                        });
+                        
+                        outputParamsList.appendChild(groupDiv);
+                    });
+                } else {
+                    outputParamsList.innerHTML = '<div class="alert alert-warning mb-0">No output parameters available</div>';
+                }
+                
+                // Load model specific settings
+                loadModelSpecificSettings(modelType.value);
+            })
+            .catch(error => {
+                console.error('Error loading parameters:', error);
+                inputParamsList.innerHTML = '<div class="alert alert-danger mb-0">Error loading input parameters</div>';
+                outputParamsList.innerHTML = '<div class="alert alert-danger mb-0">Error loading output parameters</div>';
+            });
+    }
+    
+    // Function to open component parameter modal
+    function openComponentModal(paramName, paramType, streamName) {
+        // Set modal title
+        document.getElementById('parameterModalLabel').textContent = `Configure ${paramName} Components`;
+        
+        // Get components list container
+        const componentsList = document.getElementById('componentsList');
+        componentsList.innerHTML = `
+            <tr>
+                <td colspan="3" class="text-center">
+                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span class="ms-2">Loading components...</span>
+                </td>
+            </tr>
+        `;
+        
+        // Fetch components from API
+        fetch(`/surrogate/api/components/${caseSelect.value}?stream=${streamName}&param_type=${paramType}`)
+            .then(response => response.json())
+            .then(data => {
+                componentsList.innerHTML = '';
+                
+                if (data.components && Object.keys(data.components).length > 0) {
+                    // Add rows for each component
+                    Object.keys(data.components).forEach(component => {
+                        const row = document.createElement('tr');
+                        
+                        const checkCell = document.createElement('td');
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.className = 'form-check-input component-checkbox';
+                        checkbox.value = component;
+                        checkbox.dataset.paramName = paramName;
+                        checkCell.appendChild(checkbox);
+                        
+                        const nameCell = document.createElement('td');
+                        nameCell.textContent = component;
+                        
+                        const typeCell = document.createElement('td');
+                        typeCell.textContent = paramType;
+                        
+                        row.appendChild(checkCell);
+                        row.appendChild(nameCell);
+                        row.appendChild(typeCell);
+                        
+                        componentsList.appendChild(row);
+                    });
+                } else {
+                    componentsList.innerHTML = `
+                        <tr>
+                            <td colspan="3" class="text-center">
+                                No components found for this parameter
+                            </td>
+                        </tr>
+                    `;
+                }
+                
+                // Show the modal
+                parameterModal.show();
+            })
+            .catch(error => {
+                console.error('Error loading components:', error);
+                componentsList.innerHTML = `
+                    <tr>
+                        <td colspan="3" class="text-center text-danger">
+                            Error loading components: ${error.message}
+                        </td>
+                    </tr>
+                `;
+                
+                // Show the modal anyway
+                parameterModal.show();
+            });
+    }
+    
+    // Function to load model-specific settings
+    function loadModelSpecificSettings(modelType) {
+        const settingsContainer = document.getElementById('modelSpecificSettings');
+        
+        // Different settings based on model type
+        switch(modelType) {
+            case 'random_forest':
+                settingsContainer.innerHTML = `
+                    <h6 class="mb-3">Random Forest Settings</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="n_estimators" class="form-label">Number of Trees</label>
+                                <input type="number" class="form-control" id="n_estimators" name="n_estimators" value="100" min="10" max="1000">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="max_depth" class="form-label">Max Depth</label>
+                                <input type="number" class="form-control" id="max_depth" name="max_depth" value="None" placeholder="None = unlimited">
+                            </div>
+                        </div>
+                    </div>
+                `;
+                break;
+                
+            case 'neural_network':
+            settingsContainer.innerHTML = `
+                    <h6 class="mb-3">Neural Network Settings</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="hidden_layer_sizes" class="form-label">Hidden Layer Sizes</label>
+                                <input type="text" class="form-control" id="hidden_layer_sizes" name="hidden_layer_sizes" value="100,100" placeholder="e.g., 100,50,25">
+                                <div class="form-text">Comma-separated list of neurons per layer</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="activation" class="form-label">Activation Function</label>
+                                <select class="form-select" id="activation" name="activation">
+                                    <option value="relu">ReLU</option>
+                                    <option value="tanh">Tanh</option>
+                                    <option value="logistic">Logistic</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="max_iter" class="form-label">Max Iterations</label>
+                                <input type="number" class="form-control" id="max_iter" name="max_iter" value="200" min="100" max="10000">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="learning_rate" class="form-label">Learning Rate</label>
+                                <select class="form-select" id="learning_rate" name="learning_rate">
+                                    <option value="constant">Constant</option>
+                                    <option value="adaptive" selected>Adaptive</option>
+                                    <option value="invscaling">Inverse Scaling</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                break;
+                
+            case 'gaussian_process':
+                settingsContainer.innerHTML = `
+                    <h6 class="mb-3">Gaussian Process Settings</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="kernel" class="form-label">Kernel</label>
+                                <select class="form-select" id="kernel" name="kernel">
+                                    <option value="rbf">RBF</option>
+                                    <option value="matern">Matern</option>
+                                    <option value="rational_quadratic">Rational Quadratic</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="alpha" class="form-label">Alpha (Noise Level)</label>
+                                <input type="number" class="form-control" id="alpha" name="alpha" value="1e-10" step="1e-10" min="0">
+                            </div>
+                        </div>
+                    </div>
+                `;
+                break;
+                
+            case 'polynomial':
+                settingsContainer.innerHTML = `
+                    <h6 class="mb-3">Polynomial Regression Settings</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="degree" class="form-label">Polynomial Degree</label>
+                                <input type="number" class="form-control" id="degree" name="degree" value="2" min="1" max="5">
+                                <div class="form-text">Higher degrees may lead to overfitting</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="include_bias" class="form-label">Include Bias Term</label>
+                                <select class="form-select" id="include_bias" name="include_bias">
+                                    <option value="true">Yes</option>
+                                    <option value="false">No</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                break;
+                
+            case 'svr':
+                settingsContainer.innerHTML = `
+                    <h6 class="mb-3">Support Vector Regression Settings</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="kernel" class="form-label">Kernel</label>
+                                <select class="form-select" id="kernel" name="kernel">
+                                    <option value="rbf">RBF</option>
+                                    <option value="linear">Linear</option>
+                                    <option value="poly">Polynomial</option>
+                                    <option value="sigmoid">Sigmoid</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="C" class="form-label">C (Regularization)</label>
+                                <input type="number" class="form-control" id="C" name="C" value="1.0" step="0.1" min="0.1">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="epsilon" class="form-label">Epsilon</label>
+                                <input type="number" class="form-control" id="epsilon" name="epsilon" value="0.1" step="0.01" min="0.01">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="gamma" class="form-label">Gamma</label>
+                                <select class="form-select" id="gamma" name="gamma">
+                                    <option value="scale">Scale</option>
+                                    <option value="auto">Auto</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                break;
+                
+            default:
+                settingsContainer.innerHTML = '<div class="alert alert-info">No specific settings for this model type</div>';
+        }
+    }
+    
+    // Function to start training process
+    function startTraining() {
+        // Collect form data
+        const formData = new FormData(document.getElementById('surrogateModelForm'));
+        
+        // Add selected input parameters
+        const selectedInputs = document.querySelectorAll('#inputParamsList input[type="checkbox"]:checked');
+        selectedInputs.forEach(input => {
+            formData.append('input_params[]', input.value);
+        });
+        
+        // Add selected output parameters
+        const selectedOutputs = document.querySelectorAll('#outputParamsList input[type="checkbox"]:checked');
+        selectedOutputs.forEach(output => {
+            formData.append('output_params[]', output.value);
+        });
+        
+        // Add test size
+        formData.append('test_size', testSize.value / 100);
+        
+        // Add random seed
+        formData.append('random_seed', document.getElementById('randomSeed').value);
+        
+        // Add model-specific settings
+        const modelSpecificInputs = document.querySelectorAll('#modelSpecificSettings input, #modelSpecificSettings select');
+        modelSpecificInputs.forEach(input => {
+            formData.append(input.name, input.value);
+        });
+        
+        // Add inverse model flag
+        formData.append('is_inverse_model', inverseModelCheck.checked);
+
+        // Get training progress elements
+        const trainingProgressBar = document.getElementById('trainingProgressBar');
+        const trainingStatusText = document.getElementById('trainingStatusText');
+        
+        // Update progress to 10%
+        setTimeout(() => {
+            trainingProgressBar.style.width = '10%';
+            trainingStatusText.textContent = 'Preparing training data...';
+            
+            // Simulate API call to train model
+            fetch('/surrogate/api/train', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Training failed');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Update progress to 100%
+                trainingProgressBar.style.width = '100%';
+                trainingStatusText.textContent = 'Training completed successfully!';
+                
+                // Show training results
+                document.getElementById('trainingResults').style.display = 'block';
+                
+                // Update metrics - handle null values
+                document.getElementById('r2Score').textContent = 
+                    data.metrics.r2_score !== null ? data.metrics.r2_score.toFixed(4) : "N/A";
+                document.getElementById('maeScore').textContent = 
+                    data.metrics.mae !== null ? data.metrics.mae.toFixed(4) : "N/A";
+                document.getElementById('rmseScore').textContent = 
+                    data.metrics.rmse !== null ? data.metrics.rmse.toFixed(4) : "N/A";
+                document.getElementById('trainingTime').textContent = 
+                    data.metrics.training_time !== null ? data.metrics.training_time + ' seconds' : "N/A";
+                
+                // Update model info - handle null values
+                document.getElementById('modelTypeInfo').textContent = data.model_info.type || "Unknown";
+                document.getElementById('inputParamsCount').textContent = data.model_info.input_params_count || 0;
+                document.getElementById('outputParamsCount').textContent = data.model_info.output_params_count || 0;
+                document.getElementById('trainingSamplesCount').textContent = data.model_info.training_samples_count || 0;
+                
+                // Enable download and use buttons
+                document.getElementById('downloadModelBtn').addEventListener('click', function() {
+                    window.location.href = `/surrogate/api/download/${data.model_id}`;
+                });
+                
+                document.getElementById('useModelBtn').addEventListener('click', function() {
+                    window.location.href = `/surrogate/model/${data.model_id}`;
+                });
+            })
+            .catch(error => {
+                console.error('Error training model:', error);
+                trainingProgressBar.style.width = '100%';
+                trainingProgressBar.classList.remove('bg-primary');
+                trainingProgressBar.classList.add('bg-danger');
+                trainingStatusText.textContent = `Training failed: ${error.message}`;
+            });
+        }, 500);
+    }
+    
+    // Initialize the page
+    // Load model specific settings for the default model type
+    loadModelSpecificSettings(modelType.value);
+    
+    // Add event listener for select all components checkbox
+    document.getElementById('selectAllComponents').addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('.component-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = this.checked;
+        });
+    });
+    
+    // Add event listener for save components button
+    document.getElementById('saveComponentsBtn').addEventListener('click', function() {
+        const selectedComponents = Array.from(document.querySelectorAll('.component-checkbox:checked'))
+            .map(checkbox => checkbox.value);
+        
+        if (selectedComponents.length === 0) {
+            alert('Please select at least one component');
+            return;
+        }
+        
+        // Get the parameter name from the first checkbox
+        const paramName = document.querySelector('.component-checkbox').dataset.paramName;
+        
+        // Update the parameter checkbox to show selected components count
+        const paramCheckbox = document.getElementById(`input_${paramName}`);
+        if (paramCheckbox) {
+            const label = document.querySelector(`label[for="input_${paramName}"]`);
+            if (label) {
+                label.textContent = `${paramName} (${selectedComponents.length} components)`;
+            }
+        }
+        
+        // Close the modal
+        parameterModal.hide();
+    });
+});
+</script>
+{% endblock %}

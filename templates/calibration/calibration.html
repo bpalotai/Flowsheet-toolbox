@@ -1,0 +1,2053 @@
+{% extends "base.html" %}
+
+{% block title %}Parameter Calibration | Simulation Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-sliders text-primary me-2"></i>Parameter Calibration</h1>
+    <a href="{{ url_for('cases.list_cases') }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Cases
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Select Case and Parameters</h5>
+            </div>
+            <div class="card-body">
+                <form id="calibrationSetupForm">
+                    <div class="mb-3">
+                        <label for="caseSelect" class="form-label">Select Case</label>
+                        <select class="form-select" id="caseSelect" required>
+                            <option value="">-- Select a case --</option>
+                            {% for case in cases %}
+                            <option value="{{ case.id }}">{{ case.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="calibrationMethod" class="form-label">Calibration Method</label>
+                                <select class="form-select" id="calibrationMethod" required>
+                                    <option value="nelder-mead">Nelder-Mead (Simplex)</option>
+                                    <option value="powell">Powell</option>
+                                    <option value="bfgs">BFGS</option>
+                                    <option value="l-bfgs-b">L-BFGS-B</option>
+                                    <option value="differential_evolution">Differential Evolution</option>
+                                    <option value="basinhopping">Basin-hopping</option>
+                                </select>
+                                <div class="form-text">Select the optimization algorithm for calibration</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="objectiveFunction" class="form-label">Objective Function</label>
+                                <select class="form-select" id="objectiveFunction" required>
+                                    <option value="mse">Mean Squared Error</option>
+                                    <option value="mae">Mean Absolute Error</option>
+                                    <option value="rmse">Root Mean Squared Error</option>
+                                    <option value="weighted_mse">Weighted MSE</option>
+                                    <option value="custom">Custom Function</option>
+                                </select>
+                                <div class="form-text">Function to minimize during calibration</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Select parameters to calibrate and provide reference data for comparison.
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0">Input Parameters to Calibrate</h6>
+                                </div>
+                                <div class="card-body" id="inputParamsContainer">
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        Select a case to load available input parameters.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0">Output Parameters for Comparison</h6>
+                                </div>
+                                <div class="card-body" id="outputParamsContainer">
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        Select a case to load available output parameters.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0">Reference Data</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="referenceDataSource" class="form-label">Reference Data Source</label>
+                                <select class="form-select" id="referenceDataSource" required>
+                                    <option value="manual">Manual Entry</option>
+                                    <option value="upload">Upload File</option>
+                                    <option value="simulation">Existing Simulation Result</option>
+                                </select>
+                            </div>
+                            
+                            <div id="manualEntryContainer">
+                                <div class="alert alert-info mb-3">
+                                    <i class="bi bi-info-circle me-2"></i>
+                                    Enter reference values for the selected output parameters.
+                                </div>
+                                <div id="referenceDataTable">
+                                    <!-- Reference data table will be generated here -->
+                                    <div class="alert alert-warning">
+                                        <i class="bi bi-exclamation-triangle me-2"></i>
+                                        Select output parameters first to enter reference values.
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="uploadContainer" style="display: none;">
+                                <div class="mb-3">
+                                    <label for="referenceDataFile" class="form-label">Upload Reference Data File</label>
+                                    <input class="form-control" type="file" id="referenceDataFile" accept=".csv,.xlsx,.xls">
+                                    <div class="form-text">Upload a CSV or Excel file with reference data</div>
+                                </div>
+                                <div class="mb-3">
+                                    <button type="button" class="btn btn-outline-primary" id="previewFileBtn" disabled>
+                                        <i class="bi bi-eye me-2"></i>Preview File
+                                    </button>
+                                </div>
+                                <div id="filePreviewContainer" style="display: none;">
+                                    <div class="alert alert-info mb-3">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        Preview of uploaded reference data.
+                                    </div>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-striped" id="filePreviewTable">
+                                            <!-- File preview will be shown here -->
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="simulationContainer" style="display: none;">
+                                <div class="mb-3">
+                                    <label for="simulationSelect" class="form-label">Select Simulation Result</label>
+                                    <select class="form-select" id="simulationSelect" disabled>
+                                        <option value="">-- Select a simulation result --</option>
+                                    </select>
+                                </div>
+                                <div id="simulationPreviewContainer" style="display: none;">
+                                    <div class="alert alert-info mb-3">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        Preview of selected simulation result.
+                                    </div>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-striped" id="simulationPreviewTable">
+                                            <!-- Simulation preview will be shown here -->
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0">Calibration Settings</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="maxIterations" class="form-label">Maximum Iterations</label>
+                                        <input type="number" class="form-control" id="maxIterations" value="100" min="10" max="1000">
+                                        <div class="form-text">Maximum number of iterations for the optimization algorithm</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="tolerance" class="form-label">Convergence Tolerance</label>
+                                        <input type="number" class="form-control" id="tolerance" value="0.0001" min="0.000001" max="0.1" step="0.0001">
+                                        <div class="form-text">Tolerance for termination of the optimization algorithm</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="useSurrogate" class="form-label">Use Surrogate Model</label>
+                                        <select class="form-select" id="useSurrogate">
+                                            <option value="false">No</option>
+                                            <option value="true">Yes</option>
+                                        </select>
+                                        <div class="form-text">Use surrogate model to speed up calibration (if available)</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6" id="surrogateModelContainer" style="display: none;">
+                                    <div class="mb-3">
+                                        <label for="surrogateModelSelect" class="form-label">Select Surrogate Model</label>
+                                        <select class="form-select" id="surrogateModelSelect" disabled>
+                                            <option value="">-- Select a surrogate model --</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end">
+                        <button type="button" id="runCalibrationBtn" class="btn btn-primary" disabled>
+                            <i class="bi bi-sliders me-2"></i> Run Calibration
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-12" id="calibrationResultsSection" style="display: none;">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Calibration Results</h5>
+                <div class="btn-group">
+                    <button type="button" id="saveCalibrationBtn" class="btn btn-success">
+                        <i class="bi bi-save me-2"></i> Save Results
+                    </button>
+                    <button type="button" id="downloadCalibrationBtn" class="btn btn-info">
+                        <i class="bi bi-download me-2"></i> Download
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="calibrationProgress" class="mb-4">
+                    <h6 class="mb-2">Calibration Progress</h6>
+                    <div class="progress mb-3">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%" id="calibrationProgressBar"></div>
+                    </div>
+                    <p id="calibrationStatusText" class="text-center">Initializing calibration...</p>
+                </div>
+                
+                <div id="calibrationResults" style="display: none;">
+                    <ul class="nav nav-tabs" id="resultsTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary-content" type="button" role="tab" aria-controls="summary-content" aria-selected="true">
+                                <i class="bi bi-list-check me-2"></i>Summary
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="parameters-tab" data-bs-toggle="tab" data-bs-target="#parameters-content" type="button" role="tab" aria-controls="parameters-content" aria-selected="false">
+                                <i class="bi bi-sliders me-2"></i>Calibrated Parameters
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="comparison-tab" data-bs-toggle="tab" data-bs-target="#comparison-content" type="button" role="tab" aria-controls="comparison-content" aria-selected="false">
+                                <i class="bi bi-bar-chart me-2"></i>Comparison
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="convergence-tab" data-bs-toggle="tab" data-bs-target="#convergence-content" type="button" role="tab" aria-controls="convergence-content" aria-selected="false">
+                                <i class="bi bi-graph-down me-2"></i>Convergence
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content p-3" id="resultsTabContent">
+                        <div class="tab-pane fade show active" id="summary-content" role="tabpanel" aria-labelledby="summary-tab">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-header bg-light">
+                                            <h6 class="mb-0">Calibration Summary</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <table class="table table-sm">
+                                                <tbody id="summaryTable">
+                                                    <!-- Summary data will be added here -->
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-header bg-light">
+                                            <h6 class="mb-0">Objective Function</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <div class="col-md-6 text-center">
+                                                    <h5>Initial Value</h5>
+                                                    <h3 id="initialObjective" class="text-danger">--</h3>
+                                                </div>
+                                                <div class="col-md-6 text-center">
+                                                    <h5>Final Value</h5>
+                                                    <h3 id="finalObjective" class="text-success">--</h3>
+                                                </div>
+                                            </div>
+                                            <div class="text-center mt-3">
+                                                <h6>Improvement</h6>
+                                                <h4 id="objectiveImprovement">--</h4>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="tab-pane fade" id="parameters-content" role="tabpanel" aria-labelledby="parameters-tab">
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Parameter</th>
+                                            <th>Initial Value</th>
+                                            <th>Calibrated Value</th>
+                                            <th>Change</th>
+                                            <th>Unit</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="parametersTable">
+                                        <!-- Parameters data will be added here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <div class="tab-pane fade" id="comparison-content" role="tabpanel" aria-labelledby="comparison-tab">
+                            <div class="table-responsive mb-4">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Output Parameter</th>
+                                            <th>Reference Value</th>
+                                            <th>Initial Simulation</th>
+                                            <th>Calibrated Simulation</th>
+                                            <th>Surrogate Prediction</th>
+                                            <th>Error Reduction</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="comparisonTable">
+                                        <!-- Comparison data will be added here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <div class="row" id="comparisonCharts">
+                                <!-- Comparison charts will be added here -->
+                            </div>
+                        </div>
+                        
+                        <div class="tab-pane fade" id="convergence-content" role="tabpanel" aria-labelledby="convergence-tab">
+                            <div class="row">
+                                <div class="col-md-12 mb-4">
+                                    <div class="card">
+                                        <div class="card-header bg-light">
+                                            <h6 class="mb-0">Objective Function Convergence</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="convergencePlot" style="height: 400px;">
+                                                <!-- Convergence plot will be added here -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="card">
+                                        <div class="card-header bg-light">
+                                            <h6 class="mb-0">Parameter Convergence</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="parameterConvergencePlot" style="height: 400px;">
+                                                <!-- Parameter convergence plot will be added here -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Component Parameters Modal -->
+<div class="modal fade" id="componentParamModal" tabindex="-1" aria-labelledby="componentParamModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="componentParamModalLabel">Configure Component Parameter</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div id="componentParamInfo" class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <span id="componentParamDescription">Configure calibration settings for each component.</span>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover" id="componentTable">
+                        <thead>
+                            <tr>
+                                <th>Component</th>
+                                <th>Calibrate</th>
+                                <th>Min Value</th>
+                                <th>Max Value</th>
+                                <th>Unit</th>
+                            </tr>
+                        </thead>
+                        <tbody id="componentTableBody">
+                            <!-- Component rows will be added here dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveComponentsBtn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Save Calibration Modal -->
+<div class="modal fade" id="saveCalibrationModal" tabindex="-1" aria-labelledby="saveCalibrationModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="saveCalibrationModalLabel">Save Calibration Results</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="saveCalibrationForm">
+                    <div class="mb-3">
+                        <label for="calibrationName" class="form-label">Calibration Name</label>
+                        <input type="text" class="form-control" id="calibrationName" placeholder="Enter a descriptive name">
+                        <div class="form-text">Provide a name to easily identify this calibration later.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="calibrationDescription" class="form-label">Description (Optional)</label>
+                        <textarea class="form-control" id="calibrationDescription" rows="3" placeholder="Enter a description"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmSaveBtn">
+                    <i class="bi bi-save me-2"></i> Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.plot.ly/plotly-2.14.0.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // DOM elements
+    const caseSelect = document.getElementById('caseSelect');
+    const calibrationMethod = document.getElementById('calibrationMethod');
+    const objectiveFunction = document.getElementById('objectiveFunction');
+    const inputParamsContainer = document.getElementById('inputParamsContainer');
+    const outputParamsContainer = document.getElementById('outputParamsContainer');
+    const referenceDataSource = document.getElementById('referenceDataSource');
+    const manualEntryContainer = document.getElementById('manualEntryContainer');
+    const uploadContainer = document.getElementById('uploadContainer');
+    const simulationContainer = document.getElementById('simulationContainer');
+    const referenceDataTable = document.getElementById('referenceDataTable');
+    const referenceDataFile = document.getElementById('referenceDataFile');
+    const previewFileBtn = document.getElementById('previewFileBtn');
+    const filePreviewContainer = document.getElementById('filePreviewContainer');
+    const filePreviewTable = document.getElementById('filePreviewTable');
+    const simulationSelect = document.getElementById('simulationSelect');
+    const simulationPreviewContainer = document.getElementById('simulationPreviewContainer');
+    const simulationPreviewTable = document.getElementById('simulationPreviewTable');
+    const useSurrogate = document.getElementById('useSurrogate');
+    const surrogateModelContainer = document.getElementById('surrogateModelContainer');
+    const surrogateModelSelect = document.getElementById('surrogateModelSelect');
+    const runCalibrationBtn = document.getElementById('runCalibrationBtn');
+    const calibrationResultsSection = document.getElementById('calibrationResultsSection');
+    const calibrationProgressBar = document.getElementById('calibrationProgressBar');
+    const calibrationStatusText = document.getElementById('calibrationStatusText');
+    const calibrationResults = document.getElementById('calibrationResults');
+    const saveCalibrationBtn = document.getElementById('saveCalibrationBtn');
+    const downloadCalibrationBtn = document.getElementById('downloadCalibrationBtn');
+    
+    // Modals
+    const componentParamModal = new bootstrap.Modal(document.getElementById('componentParamModal'));
+    const saveCalibrationModal = new bootstrap.Modal(document.getElementById('saveCalibrationModal'));
+    
+    // State variables
+    let caseId = null;
+    let caseName = null;
+    let caseParameters = null;
+    let selectedInputParams = [];
+    let selectedOutputParams = [];
+    let referenceData = {};
+    let componentData = {};
+    let calibrationData = null;
+    
+    // Event listeners
+    caseSelect.addEventListener('change', loadCaseParameters);
+    referenceDataSource.addEventListener('change', toggleReferenceDataSource);
+    referenceDataFile.addEventListener('change', handleFileUpload);
+    previewFileBtn.addEventListener('click', previewFile);
+    useSurrogate.addEventListener('change', toggleSurrogateModel);
+    runCalibrationBtn.addEventListener('click', runCalibration);
+    saveCalibrationBtn.addEventListener('click', () => saveCalibrationModal.show());
+    downloadCalibrationBtn.addEventListener('click', downloadCalibrationResults);
+    document.getElementById('confirmSaveBtn').addEventListener('click', saveCalibrationResults);
+    document.getElementById('saveComponentsBtn').addEventListener('click', saveComponentSettings);
+    
+    // Function to load case parameters
+    function loadCaseParameters() {
+        caseId = caseSelect.value;
+        if (!caseId) {
+            inputParamsContainer.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>Select a case to load available parameters.</div>';
+            outputParamsContainer.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>Select a case to load available parameters.</div>';
+            runCalibrationBtn.disabled = true;
+            return;
+        }
+        
+        caseName = caseSelect.options[caseSelect.selectedIndex].text;
+        
+        // Show loading indicators
+        inputParamsContainer.innerHTML = '<div class="d-flex justify-content-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+        outputParamsContainer.innerHTML = '<div class="d-flex justify-content-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+        
+        // Fetch case parameters
+        fetch(`/calibration/parameters/${caseId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to load case parameters');
+                }
+                return response.json();
+            })
+            .then(data => {
+                caseParameters = data;
+                renderParameterSelectors();
+                loadSimulationResults();
+                loadSurrogateModels();
+                runCalibrationBtn.disabled = false;
+            })
+            .catch(error => {
+                console.error('Error loading case parameters:', error);
+                inputParamsContainer.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>${error.message}</div>`;
+                outputParamsContainer.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>${error.message}</div>`;
+                runCalibrationBtn.disabled = true;
+            });
+    }
+    
+    // Function to render parameter selectors
+    function renderParameterSelectors() {
+        // Render input parameters
+        renderInputParameters();
+        
+        // Render output parameters
+        renderOutputParameters();
+    }
+    
+    // Function to render input parameters
+    function renderInputParameters() {
+        if (!caseParameters.inputs || Object.keys(caseParameters.inputs).length === 0) {
+            inputParamsContainer.innerHTML = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>No input parameters available for this case.</div>';
+            return;
+        }
+        
+        let inputHtml = '<div class="mb-3"><div class="form-check">';
+        inputHtml += '<input class="form-check-input" type="checkbox" id="selectAllInputs">';
+        inputHtml += '<label class="form-check-label" for="selectAllInputs"><strong>Select All</strong></label>';
+        inputHtml += '</div></div>';
+        
+        inputHtml += '<div class="input-group mb-3">';
+        inputHtml += '<input type="text" class="form-control" placeholder="Search parameters..." id="inputParamSearch">';
+        inputHtml += '<button class="btn btn-outline-secondary" type="button" id="clearInputSearch"><i class="bi bi-x"></i></button>';
+        inputHtml += '</div>';
+        
+        inputHtml += '<div class="parameter-list" style="max-height: 400px; overflow-y: auto;">';
+        
+        // Render parameters by type
+        Object.entries(caseParameters.inputs).forEach(([paramType, params]) => {
+            inputHtml += `<h6 class="mt-3 mb-2">${paramType}</h6>`;
+            
+            // Start a table for better alignment
+            inputHtml += `
+                <table class="table table-sm table-hover">
+                    <tbody>
+            `;
+            
+            Object.entries(params).forEach(([paramName, paramConfig]) => {
+                const paramId = `input_${paramName.replace(/\s+/g, '_')}`;
+                
+                // Check if this is a component-based parameter
+                const isComponentParam = paramType === 'MaterialStream' && 
+                                        paramConfig.ParameterType && 
+                                        paramConfig.ParameterType !== 'Property';
+                
+                if (isComponentParam) {
+                    // For component parameters, use a different layout
+                    inputHtml += `
+                        <tr>
+                            <td>
+                                <div class="form-check">
+                                    <input class="form-check-input input-param-checkbox" type="checkbox" id="${paramId}" value="${paramName}" data-is-component="true">
+                                    <label class="form-check-label" for="${paramId}">${paramName}</label>
+                                </div>
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-outline-primary configure-component-btn w-100" data-param-name="${paramName}" data-param-type="${paramConfig.ParameterType}" data-stream-name="${paramConfig.StreamName}" disabled>
+                                    <i class="bi bi-gear-fill me-1"></i> Configure Components
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                } else {
+                    // For regular parameters
+                    inputHtml += `
+                        <tr>
+                            <td>
+                                <div class="form-check">
+                                    <input class="form-check-input input-param-checkbox" type="checkbox" id="${paramId}" value="${paramName}" data-is-component="false">
+                                    <label class="form-check-label" for="${paramId}">${paramName}</label>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <input type="number" class="form-control form-control-sm param-min" id="${paramId}_min" placeholder="Min" disabled>
+                                    </div>
+                                    <div class="col-6">
+                                        <input type="number" class="form-control form-control-sm param-max" id="${paramId}_max" placeholder="Max" disabled>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }
+            });
+            
+            // End the table
+            inputHtml += `
+                    </tbody>
+                </table>
+            `;
+        });
+        
+        inputHtml += '</div>';
+        inputParamsContainer.innerHTML = inputHtml;
+        
+        // Add event listeners for input parameter checkboxes
+        document.querySelectorAll('.input-param-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const paramName = this.value;
+                const isComponent = this.getAttribute('data-is-component') === 'true';
+                const minInput = document.getElementById(`${this.id}_min`);
+                const maxInput = document.getElementById(`${this.id}_max`);
+                const configureBtn = this.closest('tr').querySelector('.configure-component-btn');
+                
+                if (this.checked) {
+                    // Add to selected parameters
+                    if (!selectedInputParams.includes(paramName)) {
+                        selectedInputParams.push(paramName);
+                    }
+                    
+                    // Enable min/max inputs or configure button
+                    if (isComponent && configureBtn) {
+                        configureBtn.disabled = false;
+                    } else {
+                        if (minInput && maxInput) {
+                            minInput.disabled = false;
+                            maxInput.disabled = false;
+                        }
+                    }
+                } else {
+                    // Remove from selected parameters
+                    selectedInputParams = selectedInputParams.filter(p => p !== paramName);
+                    
+                    // Disable min/max inputs or configure button
+                    if (isComponent && configureBtn) {
+                        configureBtn.disabled = true;
+                    } else {
+                        if (minInput && maxInput) {
+                            minInput.disabled = true;
+                            maxInput.disabled = true;
+                        }
+                    }
+                }
+                
+                // Update reference data table
+                updateReferenceDataTable();
+            });
+        });
+        
+        // Add event listener for select all checkbox
+        const selectAllInputs = document.getElementById('selectAllInputs');
+        if (selectAllInputs) {
+            selectAllInputs.addEventListener('change', function() {
+                document.querySelectorAll('.input-param-checkbox').forEach(checkbox => {
+                    checkbox.checked = this.checked;
+                    checkbox.dispatchEvent(new Event('change'));
+                });
+            });
+        }
+        
+        // Add event listener for search
+        const inputParamSearch = document.getElementById('inputParamSearch');
+        const clearInputSearch = document.getElementById('clearInputSearch');
+        
+        if (inputParamSearch) {
+            inputParamSearch.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase();
+                document.querySelectorAll('#inputParamsContainer .parameter-list table tbody tr').forEach(row => {
+                    const paramName = row.querySelector('.form-check-label').textContent.toLowerCase();
+                    if (paramName.includes(searchTerm)) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            });
+        }
+        
+        if (clearInputSearch) {
+            clearInputSearch.addEventListener('click', function() {
+                inputParamSearch.value = '';
+                document.querySelectorAll('#inputParamsContainer .parameter-list table tbody tr').forEach(row => {
+                    row.style.display = '';
+                });
+            });
+        }
+        
+        // Add event listeners for component parameter configuration buttons
+        document.querySelectorAll('#inputParamsContainer .configure-component-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const paramName = this.getAttribute('data-param-name');
+                const paramType = this.getAttribute('data-param-type');
+                const streamName = this.getAttribute('data-stream-name');
+                
+                openComponentModal(paramName, paramType, streamName);
+            });
+        });
+    }
+    
+    // Function to render output parameters
+    function renderOutputParameters() {
+        if (!caseParameters.outputs || Object.keys(caseParameters.outputs).length === 0) {
+            outputParamsContainer.innerHTML = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>No output parameters available for this case.</div>';
+            return;
+        }
+        
+        let outputHtml = '<div class="mb-3"><div class="form-check">';
+        outputHtml += '<input class="form-check-input" type="checkbox" id="selectAllOutputs">';
+        outputHtml += '<label class="form-check-label" for="selectAllOutputs"><strong>Select All</strong></label>';
+        outputHtml += '</div></div>';
+        
+        outputHtml += '<div class="input-group mb-3">';
+        outputHtml += '<input type="text" class="form-control" placeholder="Search parameters..." id="outputParamSearch">';
+        outputHtml += '<button class="btn btn-outline-secondary" type="button" id="clearOutputSearch"><i class="bi bi-x"></i></button>';
+        outputHtml += '</div>';
+        
+        outputHtml += '<div class="parameter-list" style="max-height: 400px; overflow-y: auto;">';
+        
+        // Render parameters by type
+        Object.entries(caseParameters.outputs).forEach(([paramType, params]) => {
+            outputHtml += `<h6 class="mt-3 mb-2">${paramType}</h6>`;
+            
+            // Start a table for better alignment
+            outputHtml += `
+                <table class="table table-sm table-hover">
+                    <tbody>
+            `;
+            
+            Object.entries(params).forEach(([paramName, paramConfig]) => {
+                const paramId = `output_${paramName.replace(/\s+/g, '_')}`;
+                
+                // Check if this is a component-based parameter
+                const isComponentParam = paramType === 'MaterialStream' && 
+                                        paramConfig.ParameterType && 
+                                        paramConfig.ParameterType !== 'Property';
+                
+                if (isComponentParam) {
+                    // For component parameters, use a different layout
+                    outputHtml += `
+                        <tr>
+                            <td>
+                                <div class="form-check">
+                                    <input class="form-check-input output-param-checkbox" type="checkbox" id="${paramId}" value="${paramName}" data-is-component="true">
+                                    <label class="form-check-label" for="${paramId}">${paramName}</label>
+                                </div>
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-outline-primary configure-output-component-btn w-100" data-param-name="${paramName}" data-param-type="${paramConfig.ParameterType}" data-stream-name="${paramConfig.StreamName}" disabled>
+                                    <i class="bi bi-gear-fill me-1"></i> Configure Components
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                } else {
+                    // For regular parameters
+                    outputHtml += `
+                        <tr>
+                            <td>
+                                <div class="form-check">
+                                    <input class="form-check-input output-param-checkbox" type="checkbox" id="${paramId}" value="${paramName}" data-is-component="false">
+                                    <label class="form-check-label" for="${paramId}">${paramName}</label>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="form-text text-muted">
+                                    ${paramType === 'Spreadsheet' ? 
+                                        `Spreadsheet: ${paramConfig.SpreadsheetName}, Cell: ${paramConfig.Cell}` : 
+                                        paramType === 'MaterialStream' ? 
+                                            `Stream: ${paramConfig.StreamName}, Property: ${paramConfig.PropertyName || paramConfig.ParameterType}` : 
+                                            paramType === 'EnergyStream' ? 
+                                                `Stream: ${paramConfig.StreamName}, Property: ${paramConfig.PropertyName}` : 
+                                                ''}
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }
+            });
+            
+            // End the table
+            outputHtml += `
+                    </tbody>
+                </table>
+            `;
+        });
+        
+        outputHtml += '</div>';
+        outputParamsContainer.innerHTML = outputHtml;
+        
+        // Add event listeners for output parameter checkboxes
+        document.querySelectorAll('.output-param-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const paramName = this.value;
+                const isComponent = this.getAttribute('data-is-component') === 'true';
+                const configureBtn = this.closest('tr').querySelector('.configure-output-component-btn');
+                
+                if (this.checked) {
+                    // Add to selected parameters
+                    if (!selectedOutputParams.includes(paramName)) {
+                        selectedOutputParams.push(paramName);
+                    }
+                    
+                    // Enable configure button for component parameters
+                    if (isComponent && configureBtn) {
+                        configureBtn.disabled = false;
+                    }
+                } else {
+                    // Remove from selected parameters
+                    selectedOutputParams = selectedOutputParams.filter(p => p !== paramName);
+                    
+                    // Disable configure button for component parameters
+                    if (isComponent && configureBtn) {
+                        configureBtn.disabled = true;
+                    }
+                }
+                
+                // Update reference data table
+                updateReferenceDataTable();
+            });
+        });
+        
+        // Add event listener for select all checkbox
+        const selectAllOutputs = document.getElementById('selectAllOutputs');
+        if (selectAllOutputs) {
+            selectAllOutputs.addEventListener('change', function() {
+                document.querySelectorAll('.output-param-checkbox').forEach(checkbox => {
+                    checkbox.checked = this.checked;
+                    checkbox.dispatchEvent(new Event('change'));
+                });
+            });
+        }
+        
+        // Add event listener for search
+        const outputParamSearch = document.getElementById('outputParamSearch');
+        const clearOutputSearch = document.getElementById('clearOutputSearch');
+        
+        if (outputParamSearch) {
+            outputParamSearch.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase();
+                document.querySelectorAll('#outputParamsContainer .parameter-list table tbody tr').forEach(row => {
+                    const paramName = row.querySelector('.form-check-label').textContent.toLowerCase();
+                    if (paramName.includes(searchTerm)) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            });
+        }
+        
+        if (clearOutputSearch) {
+            clearOutputSearch.addEventListener('click', function() {
+                outputParamSearch.value = '';
+                document.querySelectorAll('#outputParamsContainer .parameter-list table tbody tr').forEach(row => {
+                    row.style.display = '';
+                });
+            });
+        }
+        
+        // Add event listeners for component parameter configuration buttons
+        document.querySelectorAll('#outputParamsContainer .configure-output-component-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const paramName = this.getAttribute('data-param-name');
+                const paramType = this.getAttribute('data-param-type');
+                const streamName = this.getAttribute('data-stream-name');
+                
+                openComponentModal(paramName, paramType, streamName, true);
+            });
+        });
+    }
+    
+    // Function to toggle reference data source
+    function toggleReferenceDataSource() {
+        const source = referenceDataSource.value;
+        
+        // Hide all containers
+        manualEntryContainer.style.display = 'none';
+        uploadContainer.style.display = 'none';
+        simulationContainer.style.display = 'none';
+        
+        // Show selected container
+        if (source === 'manual') {
+            manualEntryContainer.style.display = 'block';
+            updateReferenceDataTable();
+        } else if (source === 'upload') {
+            uploadContainer.style.display = 'block';
+            previewFileBtn.disabled = !referenceDataFile.files.length;
+        } else if (source === 'simulation') {
+            simulationContainer.style.display = 'block';
+        }
+    }
+    
+    // Function to update reference data table for manual entry
+    function updateReferenceDataTable() {
+        if (referenceDataSource.value !== 'manual' || selectedOutputParams.length === 0) {
+            referenceDataTable.innerHTML = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>Select output parameters first to enter reference values.</div>';
+            return;
+        }
+        
+        let tableHtml = `
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th>Output Parameter</th>
+                        <th>Reference Value</th>
+                        <th>Unit</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        selectedOutputParams.forEach(param => {
+            // Get unit if available from case parameters
+            let unit = '';
+            let paramConfig = null;
+            
+            // Find parameter in case parameters
+            Object.entries(caseParameters.outputs).forEach(([paramType, params]) => {
+                if (param in params) {
+                    paramConfig = params[param];
+                    if (paramConfig.UOM) {
+                        unit = paramConfig.UOM;
+                    }
+                }
+            });
+            
+            // Get current value if exists
+            const currentValue = referenceData[param] || '';
+            
+            tableHtml += `                <tr>
+                    <td>${param}</td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm reference-value" 
+                               id="ref_${param.replace(/\s+/g, '_')}" 
+                               data-param="${param}" 
+                               value="${currentValue}" 
+                               step="any">
+                    </td>
+                    <td>${unit}</td>
+                </tr>
+            `;
+        });
+        
+        tableHtml += `
+                </tbody>
+            </table>
+        `;
+        
+        referenceDataTable.innerHTML = tableHtml;
+        
+        // Add event listeners for reference value inputs
+        document.querySelectorAll('.reference-value').forEach(input => {
+            input.addEventListener('change', function() {
+                const param = this.getAttribute('data-param');
+                const value = parseFloat(this.value);
+                
+                if (!isNaN(value)) {
+                    referenceData[param] = value;
+                } else {
+                    delete referenceData[param];
+                }
+            });
+        });
+    }
+    
+    // Function to handle file upload
+    function handleFileUpload() {
+        previewFileBtn.disabled = !referenceDataFile.files.length;
+        filePreviewContainer.style.display = 'none';
+    }
+    
+    // Function to preview uploaded file
+    function previewFile() {
+        if (!referenceDataFile.files.length) {
+            return;
+        }
+        
+        const file = referenceDataFile.files[0];
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        fetch('/calibration/preview_file', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to preview file');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Display preview
+            filePreviewContainer.style.display = 'block';
+            
+            // Create table header
+            let tableHtml = '<thead><tr>';
+            data.columns.forEach(column => {
+                tableHtml += `<th>${column}</th>`;
+            });
+            tableHtml += '</tr></thead>';
+            
+            // Create table body
+            tableHtml += '<tbody>';
+            data.preview.forEach(row => {
+                tableHtml += '<tr>';
+                data.columns.forEach(column => {
+                    tableHtml += `<td>${row[column] !== null ? row[column] : ''}</td>`;
+                });
+                tableHtml += '</tr>';
+            });
+            tableHtml += '</tbody>';
+            
+            filePreviewTable.innerHTML = tableHtml;
+            
+            // Store reference data
+            referenceData = data.reference_data;
+        })
+        .catch(error => {
+            console.error('Error previewing file:', error);
+            filePreviewContainer.style.display = 'block';
+            filePreviewTable.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>${error.message}</div>`;
+        });
+    }
+    
+    // Function to load simulation results
+    function loadSimulationResults() {
+        if (!caseId) return;
+        
+        simulationSelect.disabled = true;
+        simulationSelect.innerHTML = '<option value="">-- Loading simulation results --</option>';
+        
+        fetch(`/calibration/simulation_results/${caseId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to load simulation results');
+                }
+                return response.json();
+            })
+            .then(data => {
+                simulationSelect.innerHTML = '<option value="">-- Select a simulation result --</option>';
+                
+                data.results.forEach(result => {
+                    const option = document.createElement('option');
+                    option.value = result.id;
+                    option.textContent = `${result.name} (${result.date})`;
+                    simulationSelect.appendChild(option);
+                });
+                
+                simulationSelect.disabled = false;
+                
+                // Add event listener for simulation selection
+                simulationSelect.addEventListener('change', function() {
+                    if (this.value) {
+                        loadSimulationPreview(this.value);
+                    } else {
+                        simulationPreviewContainer.style.display = 'none';
+                    }
+                });
+            })
+            .catch(error => {
+                console.error('Error loading simulation results:', error);
+                simulationSelect.innerHTML = '<option value="">-- Error loading results --</option>';
+                simulationSelect.disabled = true;
+            });
+    }
+    
+    // Function to load simulation preview
+    function loadSimulationPreview(resultId) {
+        simulationPreviewContainer.style.display = 'none';
+        
+        fetch(`/calibration/simulation_result/${resultId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to load simulation result');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Display preview
+                simulationPreviewContainer.style.display = 'block';
+                
+                // Create table
+                let tableHtml = `
+                    <thead>
+                        <tr>
+                            <th>Parameter</th>
+                            <th>Value</th>
+                            <th>Unit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                `;
+                
+                // Add output parameters
+                if (data.outputs) {
+                    Object.entries(data.outputs).forEach(([param, value]) => {
+                        let displayValue = value;
+                        let unit = '';
+                        
+                        if (typeof value === 'object' && value !== null) {
+                            if (value.value !== undefined) {
+                                displayValue = value.value;
+                                unit = value.uom || '';
+                            } else {
+                                // Component dictionary
+                                displayValue = 'Component data';
+                            }
+                        }
+                        
+                        tableHtml += `
+                            <tr>
+                                <td>${param}</td>
+                                <td>${typeof displayValue === 'number' ? displayValue.toFixed(6) : displayValue}</td>
+                                <td>${unit}</td>
+                            </tr>
+                        `;
+                    });
+                }
+                
+                tableHtml += '</tbody>';
+                simulationPreviewTable.innerHTML = tableHtml;
+                
+                // Store reference data
+                referenceData = {};
+                if (data.outputs) {
+                    Object.entries(data.outputs).forEach(([param, value]) => {
+                        if (typeof value === 'object' && value !== null) {
+                            if (value.value !== undefined) {
+                                referenceData[param] = value.value;
+                            }
+                        } else if (typeof value === 'number') {
+                            referenceData[param] = value;
+                        }
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error loading simulation result:', error);
+                simulationPreviewContainer.style.display = 'block';
+                simulationPreviewTable.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>${error.message}</div>`;
+            });
+    }
+    
+    // Function to load surrogate models
+    function loadSurrogateModels() {
+        if (!caseId) return;
+        
+        surrogateModelSelect.disabled = true;
+        surrogateModelSelect.innerHTML = '<option value="">-- Loading surrogate models --</option>';
+        
+        fetch(`/calibration/surrogate_models/${caseId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to load surrogate models');
+                }
+                return response.json();
+            })
+            .then(data => {
+                surrogateModelSelect.innerHTML = '<option value="">-- Select a surrogate model --</option>';
+                
+                if (data.models.length === 0) {
+                    surrogateModelSelect.innerHTML = '<option value="">-- No surrogate models available --</option>';
+                    surrogateModelSelect.disabled = true;
+                    return;
+                }
+                
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = `${model.name} (${model.model_type})`;
+                    surrogateModelSelect.appendChild(option);
+                });
+                
+                surrogateModelSelect.disabled = false;
+            })
+            .catch(error => {
+                console.error('Error loading surrogate models:', error);
+                surrogateModelSelect.innerHTML = '<option value="">-- Error loading models --</option>';
+                surrogateModelSelect.disabled = true;
+            });
+    }
+    
+    // Function to toggle surrogate model
+    function toggleSurrogateModel() {
+        if (useSurrogate.value === 'true') {
+            surrogateModelContainer.style.display = 'block';
+        } else {
+            surrogateModelContainer.style.display = 'none';
+        }
+    }
+    
+    // Function to open the component modal
+    function openComponentModal(paramName, paramType, streamName, isOutput = false) {
+        // Set modal title and description
+        document.getElementById('componentParamModalLabel').textContent = `Configure ${paramName} Components`;
+        
+        let description = `Configure calibration settings for each component of ${streamName} (${paramType}).`;
+        if (isOutput) {
+            description = `Select components to include in the calibration objective function.`;
+        }
+        document.getElementById('componentParamDescription').textContent = description;
+        
+        // Get component data if it exists, or initialize with empty values
+        let components = componentData[paramName] || {};
+        
+        // Fetch components from server if we don't have them yet
+        if (Object.keys(components).length === 0) {
+            // Show loading indicator
+            document.getElementById('componentTableBody').innerHTML = `
+                <tr>
+                    <td colspan="5" class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading components...</p>
+                    </td>
+                </tr>
+            `;
+            
+            // Fetch components from server
+            fetch(`/calibration/components/${caseId}?stream=${streamName}&param_type=${paramType}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to load components');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.components && Object.keys(data.components).length > 0) {
+                        // Initialize component data with ranges
+                        Object.keys(data.components).forEach(component => {
+                            components[component] = {
+                                calibrate: true,
+                                min: 0,
+                                max: paramType === 'MassFrac' ? 1 : 100,
+                                unit: data.unit || ''
+                            };
+                        });
+                        
+                        // Store component data
+                        componentData[paramName] = components;
+                        
+                        // Render component table
+                        renderComponentTable(paramName, components, isOutput);
+                    } else {
+                        // No components found
+                        document.getElementById('componentTableBody').innerHTML = `
+                            <tr>
+                                <td colspan="5" class="text-center">
+                                    <p class="text-muted">No components found for this parameter.</p>
+                                </td>
+                            </tr>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading components:', error);
+                    document.getElementById('componentTableBody').innerHTML = `
+                        <tr>
+                            <td colspan="5" class="text-center text-danger">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                ${error.message}
+                            </td>
+                        </tr>
+                    `;
+                });
+        } else {
+            // We already have component data, just render it
+            renderComponentTable(paramName, components, isOutput);
+        }
+        
+        // Store the current parameter name as a data attribute on the save button
+        document.getElementById('saveComponentsBtn').setAttribute('data-param-name', paramName);
+        document.getElementById('saveComponentsBtn').setAttribute('data-is-output', isOutput ? 'true' : 'false');
+        
+        // Show the modal
+        componentParamModal.show();
+    }
+    
+    // Function to render the component table
+    function renderComponentTable(paramName, components, isOutput) {
+        const tableBody = document.getElementById('componentTableBody');
+        tableBody.innerHTML = '';
+        
+        if (Object.keys(components).length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="text-center">
+                        <p class="text-muted">No components defined yet.</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        // Add rows for each component
+        Object.entries(components).forEach(([component, config]) => {
+            const row = document.createElement('tr');
+            
+            // Get values with defaults
+            const calibrate = config.calibrate !== undefined ? config.calibrate : true;
+            const min = config.min !== undefined ? config.min : 0;
+            const max = config.max !== undefined ? config.max : 100;
+            const unit = config.unit || '';
+            
+            if (isOutput) {
+                // For output components, just show checkbox to include in objective function
+                row.innerHTML = `
+                    <td>${component}</td>
+                    <td>
+                        <div class="form-check">
+                            <input class="form-check-input component-calibrate" type="checkbox" 
+                                data-component="${component}" ${calibrate ? 'checked' : ''}>
+                        </div>
+                    </td>
+                    <td colspan="2">
+                        <div class="form-text text-muted">Include in objective function</div>
+                    </td>
+                    <td>${unit}</td>
+                `;
+            } else {
+                // For input components, show min/max ranges
+                row.innerHTML = `
+                    <td>${component}</td>
+                    <td>
+                        <div class="form-check">
+                            <input class="form-check-input component-calibrate" type="checkbox" 
+                                data-component="${component}" ${calibrate ? 'checked' : ''}>
+                        </div>
+                    </td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm component-min" 
+                            data-component="${component}" value="${min}" step="0.001" 
+                            ${!calibrate ? 'disabled' : ''}>
+                    </td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm component-max" 
+                            data-component="${component}" value="${max}" step="0.001"
+                            ${!calibrate ? 'disabled' : ''}>
+                    </td>
+                    <td>${unit}</td>
+                `;
+            }
+            
+            tableBody.appendChild(row);
+        });
+        
+        // Add event listeners for calibrate checkboxes
+        document.querySelectorAll('.component-calibrate').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const component = this.getAttribute('data-component');
+                const minInput = this.closest('tr').querySelector('.component-min');
+                const maxInput = this.closest('tr').querySelector('.component-max');
+                
+                if (minInput && maxInput) {
+                    minInput.disabled = !this.checked;
+                    maxInput.disabled = !this.checked;
+                }
+            });
+        });
+    }
+    
+    // Function to save component settings
+    function saveComponentSettings() {
+        const paramName = document.getElementById('saveComponentsBtn').getAttribute('data-param-name');
+        const isOutput = document.getElementById('saveComponentsBtn').getAttribute('data-is-output') === 'true';
+        
+        // Get existing component data
+        let components = componentData[paramName] || {};
+        
+        // Update with values from the form
+        document.querySelectorAll('#componentTableBody tr').forEach(row => {
+            const componentCell = row.querySelector('td:first-child');
+            if (!componentCell) return;
+            
+            const component = componentCell.textContent;
+            const calibrateCheckbox = row.querySelector('.component-calibrate');
+            const minInput = row.querySelector('.component-min');
+            const maxInput = row.querySelector('.component-max');
+            
+            if (calibrateCheckbox) {
+                components[component] = components[component] || {};
+                components[component].calibrate = calibrateCheckbox.checked;
+                
+                if (minInput && maxInput) {
+                    components[component].min = parseFloat(minInput.value);
+                    components[component].max = parseFloat(maxInput.value);
+                }
+            }
+        });
+        
+        // Store updated component data
+        componentData[paramName] = components;
+        
+        // Close the modal
+        componentParamModal.hide();
+        
+        // Update the button to show it has data
+        const selector = isOutput ? 
+            `.configure-output-component-btn[data-param-name="${paramName}"]` : 
+            `.configure-component-btn[data-param-name="${paramName}"]`;
+        
+        const button = document.querySelector(selector);
+        if (button) {
+            button.classList.remove('btn-outline-primary');
+            button.classList.add('btn-success');
+            
+            // Add a badge showing the number of components
+            const componentCount = Object.keys(components).length;
+            const calibratedCount = Object.values(components).filter(c => c.calibrate).length;
+            
+            const badgeSpan = document.createElement('span');
+            badgeSpan.className = 'badge bg-light text-dark ms-2';
+            badgeSpan.textContent = `${calibratedCount}/${componentCount} components`;
+            
+            // Remove any existing badge
+            const existingBadge = button.querySelector('.badge');
+            if (existingBadge) {
+                button.removeChild(existingBadge);
+            }
+            
+            button.appendChild(badgeSpan);
+        }
+    }
+    
+    // Function to run calibration
+    function runCalibration() {
+        // Validate inputs
+        if (!caseId) {
+            alert('Please select a case.');
+            return;
+        }
+        
+        if (selectedInputParams.length === 0) {
+            alert('Please select at least one input parameter to calibrate.');
+            return;
+        }
+        
+        if (selectedOutputParams.length === 0) {
+            alert('Please select at least one output parameter for comparison.');
+            return;
+        }
+        
+        if (Object.keys(referenceData).length === 0) {
+            alert('Please provide reference data for comparison.');
+            return;
+        }
+        
+        // Collect parameter ranges for input parameters
+        const paramRanges = {};
+        
+        document.querySelectorAll('.input-param-checkbox:checked').forEach(checkbox => {
+            const paramName = checkbox.value;
+            const isComponent = checkbox.getAttribute('data-is-component') === 'true';
+            
+            if (isComponent) {
+                // Component parameter
+                if (componentData[paramName]) {
+                    paramRanges[paramName] = {
+                        type: 'component',
+                        components: componentData[paramName]
+                    };
+                }
+            } else {
+                // Regular parameter
+                const minInput = document.getElementById(`${checkbox.id}_min`);
+                const maxInput = document.getElementById(`${checkbox.id}_max`);
+                
+                if (minInput && maxInput) {
+                    const min = parseFloat(minInput.value);
+                    const max = parseFloat(maxInput.value);
+                    
+                    if (isNaN(min) || isNaN(max)) {
+                        alert(`Please enter valid min/max values for ${paramName}.`);
+                        return;
+                    }
+                    
+                    if (min >= max) {
+                        alert(`Min value must be less than max value for ${paramName}.`);
+                        return;
+                    }
+                    
+                    paramRanges[paramName] = {
+                        type: 'scalar',
+                        min: min,
+                        max: max
+                    };
+                }
+            }
+        });
+        
+        // Collect output component settings
+        const outputComponents = {};
+        
+        document.querySelectorAll('.output-param-checkbox:checked').forEach(checkbox => {
+            const paramName = checkbox.value;
+            const isComponent = checkbox.getAttribute('data-is-component') === 'true';
+            
+            if (isComponent && componentData[paramName]) {
+                outputComponents[paramName] = componentData[paramName];
+            }
+        });
+        
+        // Collect calibration settings
+        const calibrationSettings = {
+            method: calibrationMethod.value,
+            objective_function: objectiveFunction.value,
+            max_iterations: parseInt(document.getElementById('maxIterations').value),
+            tolerance: parseFloat(document.getElementById('tolerance').value),
+            use_surrogate: useSurrogate.value === 'true',
+            surrogate_model_id: useSurrogate.value === 'true' ? surrogateModelSelect.value : null
+        };
+        
+        // Disable the run button
+        runCalibrationBtn.disabled = true;
+        runCalibrationBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Running...';
+        
+        // Show calibration results section
+        calibrationResultsSection.style.display = 'block';
+        calibrationResults.style.display = 'none';
+        
+        // Reset progress bar
+        calibrationProgressBar.style.width = '0%';
+        calibrationStatusText.textContent = 'Initializing calibration...';
+        
+        // Prepare request data
+        const requestData = {
+            case_id: caseId,
+            input_params: selectedInputParams,
+            output_params: selectedOutputParams,
+            reference_data: referenceData,
+            param_ranges: paramRanges,
+            output_components: outputComponents,
+            settings: calibrationSettings
+        };
+        
+        // Send request to run calibration
+        fetch('/calibration/run', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to run calibration');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Store calibration data
+            calibrationData = data;
+            
+            // Update progress bar to 100%
+            calibrationProgressBar.style.width = '100%';
+            calibrationStatusText.textContent = 'Calibration completed successfully!';
+            
+            // Show calibration results
+            setTimeout(() => {
+                displayCalibrationResults(data);
+            }, 500);
+            
+            // Re-enable run button
+            runCalibrationBtn.disabled = false;
+            runCalibrationBtn.innerHTML = '<i class="bi bi-sliders me-2"></i> Run Calibration';
+        })
+        .catch(error => {
+            console.error('Error running calibration:', error);
+            
+            // Update progress bar to show error
+            calibrationProgressBar.style.width = '100%';
+            calibrationProgressBar.classList.remove('bg-primary');
+            calibrationProgressBar.classList.add('bg-danger');
+            calibrationStatusText.textContent = `Error: ${error.message}`;
+            
+            // Re-enable run button
+            runCalibrationBtn.disabled = false;
+            runCalibrationBtn.innerHTML = '<i class="bi bi-sliders me-2"></i> Run Calibration';
+        });
+    }
+    
+    // Function to display calibration results
+    function displayCalibrationResults(data) {
+        // Show results section
+        calibrationResults.style.display = 'block';
+        
+        // Populate summary tab
+        const summaryTable = document.getElementById('summaryTable');
+        summaryTable.innerHTML = '';
+        
+        if (data.summary) {
+            Object.entries(data.summary).forEach(([key, value]) => {
+                if (key !== 'initial_objective' && key !== 'final_objective') {
+                    const row = document.createElement('tr');
+                    
+                    const keyCell = document.createElement('th');
+                    keyCell.textContent = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    
+                    const valueCell = document.createElement('td');
+                    valueCell.textContent = value;
+                    
+                    row.appendChild(keyCell);
+                    row.appendChild(valueCell);
+                    summaryTable.appendChild(row);
+                }
+            });
+        }
+        
+        // Populate objective function values
+        if (data.summary) {
+            document.getElementById('initialObjective').textContent = data.summary.initial_objective.toFixed(6);
+            document.getElementById('finalObjective').textContent = data.summary.final_objective.toFixed(6);
+            
+            // Calculate improvement percentage
+            const improvement = ((data.summary.initial_objective - data.summary.final_objective) / data.summary.initial_objective) * 100;
+            document.getElementById('objectiveImprovement').textContent = `${improvement.toFixed(2)}%`;
+        }
+        
+        // Populate parameters tab
+        const parametersTable = document.getElementById('parametersTable');
+        parametersTable.innerHTML = '';
+        
+        if (data.input_parameters && data.calibrated_parameters) {
+            Object.entries(data.calibrated_parameters).forEach(([param, value]) => {
+                const row = document.createElement('tr');
+                
+                // Parameter name
+                const paramCell = document.createElement('td');
+                paramCell.textContent = param;
+                
+                // Initial value
+                const initialCell = document.createElement('td');
+                const initialValue = data.input_parameters[param];
+                initialCell.textContent = typeof initialValue === 'number' ? initialValue.toFixed(6) : initialValue;
+                
+                // Calibrated value
+                const calibratedCell = document.createElement('td');
+                calibratedCell.textContent = typeof value === 'number' ? value.toFixed(6) : value;
+                
+                // Change
+                const changeCell = document.createElement('td');
+                if (typeof initialValue === 'number' && typeof value === 'number') {
+                    const change = ((value - initialValue) / initialValue) * 100;
+                    changeCell.textContent = `${change.toFixed(2)}%`;
+                    
+                    // Add color based on change direction
+                    if (change > 0) {
+                        changeCell.classList.add('text-success');
+                    } else if (change < 0) {
+                        changeCell.classList.add('text-danger');
+                    }
+                } else {
+                    changeCell.textContent = 'N/A';
+                }
+                
+                // Unit
+                const unitCell = document.createElement('td');
+                unitCell.textContent = ''; // Add unit if available
+                
+                row.appendChild(paramCell);
+                row.appendChild(initialCell);
+                row.appendChild(calibratedCell);
+                row.appendChild(changeCell);
+                row.appendChild(unitCell);
+                
+                parametersTable.appendChild(row);
+            });
+        }
+        
+        // Populate comparison tab
+        const comparisonTable = document.getElementById('comparisonTable');
+        comparisonTable.innerHTML = '';
+        
+        if (data.reference_data && data.simulation_results) {
+            Object.entries(data.reference_data).forEach(([param, refValue]) => {
+                const row = document.createElement('tr');
+                
+                // Parameter name
+                const paramCell = document.createElement('td');
+                paramCell.textContent = param;
+                
+                // Reference value
+                const refCell = document.createElement('td');
+                refCell.textContent = typeof refValue === 'number' ? refValue.toFixed(6) : refValue;
+                
+                // Initial simulation value
+                const initialCell = document.createElement('td');
+                const initialValue = data.initial_simulation ? data.initial_simulation[param] : 'N/A';
+                initialCell.textContent = typeof initialValue === 'number' ? initialValue.toFixed(6) : initialValue;
+                
+                // Calibrated simulation value
+                const calibratedCell = document.createElement('td');
+                const calibratedValue = data.simulation_results[param];
+                calibratedCell.textContent = typeof calibratedValue === 'number' ? calibratedValue.toFixed(6) : calibratedValue;
+                
+                // Surrogate prediction
+                const surrogateCell = document.createElement('td');
+                const surrogateValue = data.surrogate_results ? data.surrogate_results[param] : 'N/A';
+                surrogateCell.textContent = typeof surrogateValue === 'number' ? surrogateValue.toFixed(6) : surrogateValue;
+                
+                // Error reduction
+                const errorCell = document.createElement('td');
+                if (typeof refValue === 'number' && typeof initialValue === 'number' && typeof calibratedValue === 'number') {
+                    const initialError = Math.abs(refValue - initialValue);
+                    const calibratedError = Math.abs(refValue - calibratedValue);
+                    const errorReduction = ((initialError - calibratedError) / initialError) * 100;
+                    
+                    errorCell.textContent = `${errorReduction.toFixed(2)}%`;
+                    
+                    // Add color based on error reduction
+                    if (errorReduction > 0) {
+                        errorCell.classList.add('text-success');
+                    } else {
+                        errorCell.classList.add('text-danger');
+                    }
+                } else {
+                    errorCell.textContent = 'N/A';
+                }
+                
+                row.appendChild(paramCell);
+                row.appendChild(refCell);
+                row.appendChild(initialCell);
+                row.appendChild(calibratedCell);
+                row.appendChild(surrogateCell);
+                row.appendChild(errorCell);
+                
+                comparisonTable.appendChild(row);
+            });
+        }
+        
+        // Populate comparison charts
+        const comparisonCharts = document.getElementById('comparisonCharts');
+        comparisonCharts.innerHTML = '';
+        
+        if (data.charts && data.charts.length > 0) {
+            data.charts.forEach(chart => {
+                const col = document.createElement('div');
+                col.className = 'col-md-6 mb-4';
+                
+                const card = document.createElement('div');
+                card.className = 'card';
+                
+                const cardHeader = document.createElement('div');
+                cardHeader.className = 'card-header';
+                cardHeader.textContent = chart.title || 'Comparison Chart';
+                
+                const cardBody = document.createElement('div');
+                cardBody.className = 'card-body';
+                
+                const img = document.createElement('img');
+                img.className = 'img-fluid';
+                img.src = 'data:image/png;base64,' + chart.image;
+                img.alt = chart.title || 'Comparison Chart';
+                
+                cardBody.appendChild(img);
+                card.appendChild(cardHeader);
+                card.appendChild(cardBody);
+                col.appendChild(card);
+                comparisonCharts.appendChild(col);
+            });
+        }
+        
+        // Populate convergence plots
+        if (data.convergence_data) {
+            // Objective function convergence plot
+            const convergencePlot = document.getElementById('convergencePlot');
+            
+            const objectiveTrace = {
+                x: Array.from({length: data.convergence_data.objective_values.length}, (_, i) => i + 1),
+                y: data.convergence_data.objective_values,
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Objective Function',
+                line: {
+                    color: 'rgba(0, 123, 255, 1)',
+                    width: 2
+                },
+                marker: {
+                    size: 6
+                }
+            };
+            
+            const objectiveLayout = {
+                title: 'Objective Function Convergence',
+                xaxis: {
+                    title: 'Iteration'
+                },
+                yaxis: {
+                    title: 'Objective Value'
+                },
+                margin: {
+                    l: 50,
+                    r: 30,
+                    b: 50,
+                    t: 50,
+                    pad: 4
+                }
+            };
+            
+            Plotly.newPlot(convergencePlot, [objectiveTrace], objectiveLayout);
+            
+            // Parameter convergence plot
+            const parameterConvergencePlot = document.getElementById('parameterConvergencePlot');
+            
+            const paramTraces = [];
+            
+            if (data.convergence_data.parameter_values) {
+                Object.entries(data.convergence_data.parameter_values).forEach(([param, values]) => {
+                    // Normalize values for better visualization
+                    const normalizedValues = normalizeValues(values);
+                    
+                    paramTraces.push({
+                        x: Array.from({length: values.length}, (_, i) => i + 1),
+                        y: normalizedValues,
+                        type: 'scatter',
+                        mode: 'lines+markers',
+                        name: param,
+                        marker: {
+                            size: 5
+                        }
+                    });
+                });
+            }
+            
+            const paramLayout = {
+                title: 'Parameter Convergence (Normalized)',
+                xaxis: {
+                    title: 'Iteration'
+                },
+                yaxis: {
+                    title: 'Normalized Value'
+                },
+                margin: {
+                    l: 50,
+                    r: 30,
+                    b: 50,
+                    t: 50,
+                    pad: 4
+                }
+            };
+            
+            Plotly.newPlot(parameterConvergencePlot, paramTraces, paramLayout);
+        }
+    }
+    
+    // Helper function to normalize values to 0-1 range
+    function normalizeValues(values) {
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        
+        if (max === min) {
+            return values.map(() => 0.5);
+        }
+        
+        return values.map(value => (value - min) / (max - min));
+    }
+    
+    // Function to save calibration results
+    function saveCalibrationResults() {
+        if (!calibrationData) {
+            alert('No calibration results to save.');
+            return;
+        }
+        
+        const name = document.getElementById('calibrationName').value;
+        const description = document.getElementById('calibrationDescription').value;
+        
+        if (!name) {
+            alert('Please enter a name for the calibration.');
+            return;
+        }
+        
+        // Disable the save button
+        const confirmSaveBtn = document.getElementById('confirmSaveBtn');
+        confirmSaveBtn.disabled = true;
+        confirmSaveBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...';
+        
+        // Prepare request data
+        const requestData = {
+            case_id: caseId,
+            name: name,
+            description: description,
+            calibration_data: calibrationData
+        };
+        
+        // Send request to save calibration
+        fetch('/calibration/save', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to save calibration');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Hide the modal
+            saveCalibrationModal.hide();
+            
+            // Show success message
+            alert('Calibration saved successfully!');
+            
+            // Re-enable save button
+            confirmSaveBtn.disabled = false;
+            confirmSaveBtn.innerHTML = '<i class="bi bi-save me-2"></i> Save';
+            
+            // Redirect to calibration details page
+            if (data.calibration_id) {
+                window.location.href = `/calibration/details/${data.calibration_id}`;
+            }
+        })
+        .catch(error => {
+            console.error('Error saving calibration:', error);
+            alert(`Error: ${error.message}`);
+            
+            // Re-enable save button
+            confirmSaveBtn.disabled = false;
+            confirmSaveBtn.innerHTML = '<i class="bi bi-save me-2"></i> Save';
+        });
+    }
+    
+    // Function to download calibration results
+    function downloadCalibrationResults() {
+        if (!calibrationData) {
+            alert('No calibration results to download.');
+            return;
+        }
+        
+        // Disable the download button
+        downloadCalibrationBtn.disabled = true;
+        downloadCalibrationBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Downloading...';
+        
+        // Prepare request data
+        const requestData = {
+            case_id: caseId,
+            case_name: caseName,
+            calibration_data: calibrationData
+        };
+        
+        // Send request to download calibration
+        fetch('/calibration/download', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to download calibration');
+            }
+            return response.blob();
+        })
+        .then(blob => {
+            // Create a URL for the blob
+            const url = window.URL.createObjectURL(blob);
+            
+            // Create a link to download the file
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Calibration_${caseName}_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`;
+            
+            // Append the link to the document
+            document.body.appendChild(a);
+            
+            // Click the link to trigger the download
+            a.click();
+            
+            // Clean up
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            // Re-enable the download button
+            downloadCalibrationBtn.disabled = false;
+            downloadCalibrationBtn.innerHTML = '<i class="bi bi-download me-2"></i> Download';
+        })
+        .catch(error => {
+            console.error('Error downloading calibration:', error);
+            alert(`Error: ${error.message}`);
+            
+            // Re-enable the download button
+            downloadCalibrationBtn.disabled = false;
+            downloadCalibrationBtn.innerHTML = '<i class="bi bi-download me-2"></i> Download';
+        });
+    }
+});
+</script>
+{% endblock %}

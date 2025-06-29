@@ -1,0 +1,4 @@
+# Local  directories
+simenv/
+__pycache__/
+AGENT.md

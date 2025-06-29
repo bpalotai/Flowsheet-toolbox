@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Purpose Section -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <h1 class="mb-4"><i class="bi bi-cpu text-primary me-2"></i>Process Simulation Platform</h1>
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <h2 class="card-title mb-4">Purpose & Capabilities</h2>
+                    <p class="lead">
+                        This platform bridges the gap between complex process simulations and data-driven engineering insights, 
+                        enabling engineers to efficiently analyze, optimize, and calibrate their process models.
+                    </p>
+                    <p>
+                        By integrating rigorous process simulation with advanced machine learning techniques, the platform allows you to create surrogate models, 
+                        perform parameter calibration, and conduct comprehensive analyses. These capabilities in a unified interface help you rapidly explore design spaces, 
+                        optimize operating conditions, and align simulations with real-world data.
+                    </p>
+                    <div class="mt-4">
+                        <a href="{{ url_for('cases.list_cases') }}" class="btn btn-primary me-2">
+                            <i class="bi bi-folder me-2"></i>Browse Cases
+                        </a>
+                        <a href="{{ url_for('simulations.run_simulation') }}" class="btn btn-success">
+                            <i class="bi bi-play-circle me-2"></i>Run Simulation
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Features Section -->
+    <div class="row mb-5">
+        <div class="col-12 mb-4">
+            <h2>Key Features</h2>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card dashboard-card mb-4" onclick="window.location.href='{{ url_for('cases.list_cases') }}'">
+                <div class="card-body text-center">
+                    <i class="bi bi-folder simulation-icon"></i>
+                    <h4>Case Management</h4>
+                    <p>Create, configure, and organize simulation cases with customizable parameters and settings.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card dashboard-card mb-4" onclick="window.location.href='{{ url_for('simulations.run_simulation') }}'">
+                <div class="card-body text-center">
+                    <i class="bi bi-play-circle simulation-icon"></i>
+                    <h4>Simulation Execution</h4>
+                    <p>Run and manage HYSYS simulations through an intuitive interface with real-time progress tracking.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card dashboard-card mb-4" onclick="window.location.href='{{ url_for('sampling.sampling_index') }}'">
+                <div class="card-body text-center">
+                    <i class="bi bi-grid-3x3 simulation-icon"></i>
+                    <h4>Parameter Sampling</h4>
+                    <p>Generate parameter samples using various methods including LHS, Monte Carlo, and factorial designs.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card dashboard-card mb-4" onclick="window.location.href='{{ url_for('surrogate.surrogate_index') }}'">
+                <div class="card-body text-center">
+                    <i class="bi bi-diagram-3 simulation-icon"></i>
+                    <h4>Surrogate Modeling</h4>
+                    <p>Build machine learning models to approximate simulation outputs for rapid analysis and optimization.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card dashboard-card mb-4" onclick="window.location.href='{{ url_for('calibration.index') }}'">
+                <div class="card-body text-center">
+                    <i class="bi bi-sliders simulation-icon"></i>
+                    <h4>Calibration</h4>
+                    <p>Tune simulation parameters automatically to match experimental or plant data with advanced algorithms.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card dashboard-card mb-4" onclick="window.location.href='/optimization'">
+                <div class="card-body text-center">
+                    <i class="bi bi-bullseye simulation-icon"></i>
+                    <h4>Optimization</h4>
+                    <p>Find optimal parameter values to maximize efficiency, minimize costs, or achieve specific performance targets.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card dashboard-card mb-4" onclick="window.location.href='/explainability'">
+                <div class="card-body text-center">
+                    <i class="bi bi-lightbulb simulation-icon"></i>
+                    <h4>Explainability</h4>
+                    <p>Understand and interpret your models with advanced explainability tools including SHAP, LIME, and feature importance analysis.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Academic References Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0"><i class="bi bi-journal-text me-2"></i>Academic Foundation</h4>
+                </div>
+                <div class="card-body">
+                    <p>
+                        This platform implements methodologies and algorithms developed through PhD research in process systems engineering. 
+                        The techniques for surrogate modeling, parameter calibration, and optimization are based on peer-reviewed 
+                        academic work. For detailed information about the methods implemented in this platform, please refer to the following publications:
+                    </p>
+                    
+                    <div class="alert alert-light border">
+                        <p class="mb-1"><strong>References:</strong></p>
+                        <ul class="mb-0 references-list">
+                            <li>Bárkányi, Á.; Chován, T.; Németh, S.; Abonyi, J. Modelling for Digital Twins—Potential Role of Surrogate Models. <em>Processes</em> 2021, 9, 476. <a href="https://doi.org/10.3390/pr9030476" target="_blank">https://doi.org/10.3390/pr9030476</a></li>
+                            <li>Balázs Palotai, Gábor Kis, János Abonyi, Ágnes Bárkányi, Surrogate-based flowsheet model maintenance for Digital Twins. <em>Digital Chemical Engineering</em>, Volume 15, 2025, 100228, ISSN 2772-5081. <a href="https://doi.org/10.1016/j.dche.2025.100228" target="_blank">https://doi.org/10.1016/j.dche.2025.100228</a></li>
+                            <li>Balázs Palotai, Ágnes Bárkányi, Gábor Kis, János Abonyi, Operationalization Management: Enhancing Life Cycle Management of Digital Twins. In: Flavio Manenti, Gintaras V. Reklaitis (Eds.), <em>Computer Aided Chemical Engineering</em>, Elsevier, Volume 53, 2024, Pages 3025-3030, ISSN 1570-7946. <a href="https://doi.org/10.1016/B978-0-443-28824-1.50505-6" target="_blank">https://doi.org/10.1016/B978-0-443-28824-1.50505-6</a></li>
+                        </ul>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <p class="text-muted small mb-0">
+                            <i class="bi bi-info-circle me-1"></i>
+                            This software is provided for research and educational purposes. While it implements published methods, 
+                            it is not affiliated with or endorsed by Aspen Technology, Inc. or other commercial simulation software providers.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Dashboard loaded');
+        // Additional dashboard-specific JavaScript can be added here
+    });
+</script>
+{% endblock %}

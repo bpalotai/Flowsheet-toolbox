@@ -1,0 +1,840 @@
+{% extends "base.html" %}
+
+{% block title %}Sampling Details | {{ result.name }} | Simulation Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-grid-3x3 text-primary me-2"></i>Sampling Details: {{ result.name }}</h1>
+    <!-- If a referrer is provided, use it; otherwise default to the sampling index page -->
+    <a href="{{ referrer if referrer else url_for('sampling.sampling_index') }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Back
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Sampling Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tbody>
+                        <tr>
+                            <th style="width: 30%">Name:</th>
+                            <td>{{ result.name }}</td>
+                        </tr>
+                        <tr>
+                            <th>Case:</th>
+                            <td>
+                                <a href="{{ url_for('cases.case_detail', case_id=case.id) }}">{{ case.name }}</a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Method:</th>
+                            <td>{{ result.simulation_type }}</td>
+                        </tr>
+                        <tr>
+                            <th>Number of Samples:</th>
+                            <td>{{ metadata.get('Number of Samples', 'N/A') }}</td>
+                        </tr>
+                        <tr>
+                            <th>Created:</th>
+                            <td>{{ result.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        </tr>
+                        <tr>
+                            <th>Description:</th>
+                            <td>{{ metadata.get('Description', 'N/A') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('sampling.download_sampling_result', result_id=result.id) }}" class="btn btn-primary">
+                        <i class="bi bi-download me-2"></i> Download Samples
+                    </a>
+                    <button type="button" class="btn btn-success" id="runSimulationsBtn">
+                        <i class="bi bi-play-fill me-2"></i> Run Simulations with These Samples
+                    </button>
+                    <button type="button" class="btn btn-danger" id="deleteBtn">
+                        <i class="bi bi-trash me-2"></i> Delete Sampling
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Parameter Ranges & Statistics</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" id="combinedStatsTable">
+                        <thead>
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Type</th>
+                                <th>Min</th>
+                                <th>Max</th>
+                                <th>Mean</th>
+                                <th>Median</th>
+                                <th>Std Dev</th>
+                                <th>Distribution</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Will be populated dynamically -->
+                            {% if param_ranges %}
+                                {% for param in param_ranges %}
+                                <tr data-parameter="{{ param.Parameter }}">
+                                    <td>{{ param.Parameter }}</td>
+                                    <td>{{ param.Type }}</td>
+                                    <td>{{ param.Min }}</td>
+                                    <td>{{ param.Max }}</td>
+                                    <td>--</td>
+                                    <td>--</td>
+                                    <td>--</td>
+                                    <td>{{ param.Distribution }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="8" class="text-center">
+                                        <div class="alert alert-info mb-0">
+                                            <i class="bi bi-info-circle me-2"></i>
+                                            Loading parameter statistics...
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Visualization Section -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Sample Visualizations</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">Visualization Settings</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="plotType" class="form-label">Plot Type</label>
+                                    <select class="form-select" id="plotType">
+                                        <option value="histogram">Histogram</option>
+                                        <option value="normal">Normal Plot</option>
+                                        <option value="boxplot">Box Plot</option>
+                                        <option value="heatmap">Correlation Heatmap</option>
+                                        <option value="parallel">Parallel Coordinates</option>
+                                        <option value="scatter">Scatter Plot</option>
+                                    </select>
+                                </div>
+                                
+                                <div id="normalPlotOptions">
+                                    <div class="mb-3">
+                                        <label for="normalParam" class="form-label">Parameter</label>
+                                        <select class="form-select" id="normalParam">
+                                            <!-- Options will be added dynamically -->
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div id="histogramOptions" style="display: none;">
+                                    <div class="mb-3">
+                                        <label for="histParam" class="form-label">Parameter</label>
+                                        <select class="form-select" id="histParam">
+                                            <!-- Options will be added dynamically -->
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="binCount" class="form-label">Number of Bins</label>
+                                        <input type="number" class="form-control" id="binCount" min="5" max="100" value="20">
+                                    </div>
+                                </div>
+                                
+                                <div id="boxplotOptions" style="display: none;">
+                                    <div class="mb-3">
+                                        <label for="boxParam" class="form-label">Parameter</label>
+                                        <select class="form-select" id="boxParam">
+                                            <!-- Options will be added dynamically -->
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div id="scatterOptions" style="display: none;">
+                                    <div class="mb-3">
+                                        <label for="scatterXParam" class="form-label">X Parameter</label>
+                                        <select class="form-select" id="scatterXParam">
+                                            <!-- Options will be added dynamically -->
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="scatterYParam" class="form-label">Y Parameter</label>
+                                        <select class="form-select" id="scatterYParam">
+                                            <!-- Options will be added dynamically -->
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <button type="button" id="updatePlotBtn" class="btn btn-primary w-100">
+                                    <i class="bi bi-arrow-repeat"></i> Update Plot
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-body">
+                                <div id="plotContainer" style="height: 500px;">
+                                    <div class="d-flex justify-content-center align-items-center h-100">
+                                        <div class="text-center">
+                                            <div class="spinner-border text-primary" role="status">
+                                                <span class="visually-hidden">Loading...</span>
+                                            </div>
+                                            <p class="mt-2">Loading visualization...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteModalLabel">Confirm Deletion</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this sampling result?</p>
+                <p class="text-danger">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.plot.ly/plotly-2.14.0.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const resultId = {{ result.id }};
+    const caseId = {{ case.id }};
+    
+    // Delete button
+    const deleteBtn = document.getElementById('deleteBtn');
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+    
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', function() {
+            deleteModal.show();
+        });
+    }
+    
+    if (confirmDeleteBtn) {
+        confirmDeleteBtn.addEventListener('click', function() {
+            // Send delete request
+            fetch(`/sampling/delete/${resultId}`, {
+                method: 'DELETE'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to delete sampling result');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Redirect to sampling page
+                window.location.href = '/sampling';
+            })
+            .catch(error => {
+                console.error('Error deleting sampling result:', error);
+                alert(`Error: ${error.message}`);
+                deleteModal.hide();
+            });
+        });
+    }
+    
+    // Run simulations button
+    const runSimulationsBtn = document.getElementById('runSimulationsBtn');
+    
+    if (runSimulationsBtn) {
+        runSimulationsBtn.addEventListener('click', function() {
+            // Disable button and show loading state
+            runSimulationsBtn.disabled = true;
+            runSimulationsBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Running...';
+            
+            // Fetch samples
+            fetch(`/sampling/result/${resultId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch samples');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Extract sampling method from the result data
+                    const samplingMethod = data.type || 'unknown';
+
+                    // Run simulations with samples
+                    return fetch('/sampling/run_simulations', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            case_id: caseId,
+                            samples: data.samples,
+                            method: samplingMethod,  // Include the sampling method
+                            param_ranges: data.param_ranges || {}  // Include parameter ranges if available
+                        })
+                    });
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to run simulations');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Redirect to batch results page
+                    if (data.batch_id) {
+                        window.location.href = `/simulations/batch_results/${data.result_id}`;
+                    } else {
+                        alert('Simulations completed successfully!');
+                        window.location.reload();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error running simulations:', error);
+                    alert(`Error: ${error.message}`);
+                    
+                    // Re-enable button
+                    runSimulationsBtn.disabled = false;
+                    runSimulationsBtn.innerHTML = '<i class="bi bi-play-fill me-2"></i> Run Simulations with These Samples';
+                });
+        });
+    }
+    
+    // Visualization section code
+    let samplingData = null;
+    
+    // Fetch samples data on page load for the visualization section
+    fetch(`/sampling/result/${resultId}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to fetch samples');
+            }
+            return response.json();
+        })
+        .then(data => {
+            samplingData = data;
+            initializeVisualizations(data.samples);
+            updateCombinedStatsTable(data.samples);
+        })
+        .catch(error => {
+            console.error('Error fetching samples:', error);
+            document.getElementById('plotContainer').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Error loading samples: ${error.message}
+                </div>
+            `;
+        });
+    
+    // Function to update the combined stats table
+    function updateCombinedStatsTable(samples) {
+        if (!samples || samples.length === 0) {
+            return;
+        }
+        
+        const paramNames = Object.keys(samples[0]);
+        const statsTable = document.getElementById('combinedStatsTable').querySelector('tbody');
+        
+        // Clear existing rows if there are no param_ranges
+        if (statsTable.querySelector('tr td.text-center')) {
+            statsTable.innerHTML = '';
+        }
+        
+        paramNames.forEach(param => {
+            const values = samples.map(sample => sample[param]);
+            
+            // Skip if values are not numeric
+            if (!values.every(v => typeof v === 'number' || !isNaN(parseFloat(v)))) {
+                return;
+            }
+            
+            // Calculate statistics
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+            
+            // Sort values for median
+            const sortedValues = [...values].sort((a, b) => a - b);
+            const median = sortedValues.length % 2 === 0 
+                ? (sortedValues[sortedValues.length / 2 - 1] + sortedValues[sortedValues.length / 2]) / 2
+                : sortedValues[Math.floor(sortedValues.length / 2)];
+            
+            // Calculate standard deviation
+            const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+            const stdDev = Math.sqrt(variance);
+            
+            // Check if row already exists for this parameter
+            let row = statsTable.querySelector(`tr[data-parameter="${param}"]`);
+            
+            if (row) {
+                // Update existing row with statistics
+                const cells = row.querySelectorAll('td');
+                cells[2].textContent = min.toFixed(4); // Min
+                cells[3].textContent = max.toFixed(4); // Max
+                cells[4].textContent = mean.toFixed(4); // Mean
+                cells[5].textContent = median.toFixed(4); // Median
+                cells[6].textContent = stdDev.toFixed(4); // Std Dev
+            } else {
+                // Create new row
+                row = document.createElement('tr');
+                row.setAttribute('data-parameter', param);
+                row.innerHTML = `
+                    <td>${param}</td>
+                    <td>Numeric</td>
+                    <td>${min.toFixed(4)}</td>
+                    <td>${max.toFixed(4)}</td>
+                    <td>${mean.toFixed(4)}</td>
+                    <td>${median.toFixed(4)}</td>
+                    <td>${stdDev.toFixed(4)}</td>
+                    <td>--</td>
+                `;
+                statsTable.appendChild(row);
+            }
+        });
+    }
+    
+    // Function to initialize visualizations
+    function initializeVisualizations(samples) {
+        if (!samples || samples.length === 0) {
+            document.getElementById('plotContainer').innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    No samples available for visualization.
+                </div>
+            `;
+            return;
+        }
+        
+        // Get all parameter names
+        const paramNames = Object.keys(samples[0]);
+        
+        // Filter to only include numeric parameters
+        const numericParams = paramNames.filter(param => {
+            const values = samples.map(sample => sample[param]);
+            return values.every(v => typeof v === 'number' || !isNaN(parseFloat(v)));
+        });
+        
+        // Populate parameter dropdowns for visualizations
+        const normalParamSelect = document.getElementById('normalParam');
+        const histParamSelect = document.getElementById('histParam');
+        const boxParamSelect = document.getElementById('boxParam');
+        const scatterXParamSelect = document.getElementById('scatterXParam');
+        const scatterYParamSelect = document.getElementById('scatterYParam');
+        
+        // Clear existing options
+        normalParamSelect.innerHTML = '';
+        histParamSelect.innerHTML = '';
+        boxParamSelect.innerHTML = '';
+        scatterXParamSelect.innerHTML = '';
+        scatterYParamSelect.innerHTML = '';
+        
+        // Add options for each parameter
+        numericParams.forEach(param => {
+            normalParamSelect.innerHTML += `<option value="${param}">${param}</option>`;
+            histParamSelect.innerHTML += `<option value="${param}">${param}</option>`;
+            boxParamSelect.innerHTML += `<option value="${param}">${param}</option>`;
+            scatterXParamSelect.innerHTML += `<option value="${param}">${param}</option>`;
+            scatterYParamSelect.innerHTML += `<option value="${param}">${param}</option>`;
+        });
+        
+        // Set default selections
+        if (numericParams.length >= 1) {
+            normalParamSelect.value = numericParams[0];
+            histParamSelect.value = numericParams[0];
+            boxParamSelect.value = numericParams[0];
+            scatterXParamSelect.value = numericParams[0];
+        }
+        
+        if (numericParams.length >= 2) {
+            scatterYParamSelect.value = numericParams[1];
+        }
+        
+        // Set initial plot type to histogram
+        document.getElementById('plotType').value = 'histogram';
+        
+        // Show histogram options by default
+        document.getElementById('normalPlotOptions').style.display = 'none';
+        document.getElementById('histogramOptions').style.display = 'block';
+        document.getElementById('boxplotOptions').style.display = 'none';
+        document.getElementById('scatterOptions').style.display = 'none';
+        
+        // Create initial plot - explicitly call updatePlot
+        updatePlot();
+        
+        // Add event listeners for parameter changes
+        histParamSelect.addEventListener('change', updatePlot);
+        normalParamSelect.addEventListener('change', updatePlot);
+        boxParamSelect.addEventListener('change', updatePlot);
+        scatterXParamSelect.addEventListener('change', updatePlot);
+        scatterYParamSelect.addEventListener('change', updatePlot);
+        document.getElementById('binCount').addEventListener('change', updatePlot);
+        document.getElementById('binCount').addEventListener('input', updatePlot);
+    }
+    
+    // Function to update plot options based on plot type
+    document.getElementById('plotType').addEventListener('change', function() {
+        updatePlotOptions();
+        updatePlot(); // Update plot when type changes
+    });
+    
+    function updatePlotOptions() {
+        const plotType = document.getElementById('plotType').value;
+        
+        // Hide all option divs
+        document.getElementById('normalPlotOptions').style.display = 'none';
+        document.getElementById('histogramOptions').style.display = 'none';
+        document.getElementById('boxplotOptions').style.display = 'none';
+        document.getElementById('scatterOptions').style.display = 'none';
+        
+        // Show options for selected plot type
+        if (plotType === 'normal') {
+            document.getElementById('normalPlotOptions').style.display = 'block';
+        } else if (plotType === 'histogram') {
+            document.getElementById('histogramOptions').style.display = 'block';
+        } else if (plotType === 'boxplot') {
+            document.getElementById('boxplotOptions').style.display = 'block';
+        } else if (plotType === 'scatter') {
+            document.getElementById('scatterOptions').style.display = 'block';
+        }
+    }
+    
+    // Function to update the plot
+    document.getElementById('updatePlotBtn').addEventListener('click', updatePlot);
+    
+    function updatePlot() {
+        if (!samplingData || !samplingData.samples || samplingData.samples.length === 0) {
+            return;
+        }
+        
+        const plotType = document.getElementById('plotType').value;
+        const plotContainer = document.getElementById('plotContainer');
+        
+        // Clear loading indicator
+        plotContainer.innerHTML = '';
+        
+        // Extract data from samples
+        const samples = samplingData.samples;
+        
+        // Create plot based on type
+        if (plotType === 'normal') {
+            const param = document.getElementById('normalParam').value;
+            
+            // Get values for the selected parameter
+            const values = samples.map(sample => sample[param]);
+            
+            // Create x-axis as point IDs (1-based indices)
+            const pointIds = Array.from({length: values.length}, (_, i) => i + 1);
+            
+            const trace = {
+                x: pointIds,
+                y: values,
+                mode: 'lines+markers',
+                type: 'scatter',
+                name: param,
+                marker: {
+                    size: 6,
+                    color: 'rgba(0, 123, 255, 0.7)',
+                    line: {
+                        color: 'rgba(0, 123, 255, 1.0)',
+                        width: 1
+                    }
+                },
+                line: {
+                    color: 'rgba(0, 123, 255, 0.5)',
+                    width: 1
+                }
+            };
+            
+            const layout = {
+                title: `Normal Plot: ${param} vs Sample ID`,
+                xaxis: {
+                    title: 'Sample ID',
+                    tickmode: 'auto',
+                    nticks: Math.min(20, values.length)
+                },
+                yaxis: {
+                    title: param
+                },
+                hovermode: 'closest'
+            };
+            
+            Plotly.newPlot(plotContainer, [trace], layout);
+            
+        } else if (plotType === 'histogram') {
+            const param = document.getElementById('histParam').value;
+            const binCount = parseInt(document.getElementById('binCount').value);
+            
+            const values = samples.map(sample => sample[param]);
+            
+            const trace = {
+                x: values,
+                type: 'histogram',
+                nbinsx: binCount,
+                marker: {
+                    color: 'rgba(0, 123, 255, 0.7)',
+                    line: {
+                        color: 'rgba(0, 123, 255, 1.0)',
+                        width: 1
+                    }
+                }
+            };
+            
+            const layout = {
+                title: `Histogram: ${param}`,
+                xaxis: {
+                    title: param
+                },
+                yaxis: {
+                    title: 'Frequency'
+                }
+            };
+            
+            Plotly.newPlot(plotContainer, [trace], layout);
+            
+        } else if (plotType === 'boxplot') {
+            const param = document.getElementById('boxParam').value;
+            
+            const values = samples.map(sample => sample[param]);
+            
+            const trace = {
+                y: values,
+                type: 'box',
+                name: param,
+                boxpoints: 'all',
+                jitter: 0.3,
+                pointpos: 0,
+                marker: {
+                    color: 'rgba(0, 123, 255, 0.7)'
+                }
+            };
+            
+            const layout = {
+                title: `Box Plot: ${param}`,
+                yaxis: {
+                    title: param
+                }
+            };
+            
+            Plotly.newPlot(plotContainer, [trace], layout);
+            
+        } else if (plotType === 'heatmap') {
+            // Get all parameter names
+            const paramNames = Object.keys(samples[0]);
+            
+            // Filter to only include numeric parameters
+            const numericParams = paramNames.filter(param => {
+                const values = samples.map(sample => sample[param]);
+                return values.every(v => typeof v === 'number' || !isNaN(parseFloat(v)));
+            });
+            
+            // Calculate correlation matrix
+            const correlationMatrix = calculateCorrelationMatrix(samples, numericParams);
+            
+            const trace = {
+                z: correlationMatrix,
+                x: numericParams,
+                y: numericParams,
+                type: 'heatmap',
+                colorscale: 'Viridis',
+                zmin: -1,
+                zmax: 1
+            };
+            
+            const layout = {
+                title: 'Correlation Heatmap',
+                xaxis: {
+                    ticks: '',
+                    side: 'top'
+                },
+                yaxis: {
+                    ticks: '',
+                    ticksuffix: ' '
+                }
+            };
+            
+            Plotly.newPlot(plotContainer, [trace], layout);
+            
+        } else if (plotType === 'parallel') {
+            // Get all parameter names
+            const paramNames = Object.keys(samples[0]);
+            
+            // Filter to only include numeric parameters
+            const numericParams = paramNames.filter(param => {
+                const values = samples.map(sample => sample[param]);
+                return values.every(v => typeof v === 'number' || !isNaN(parseFloat(v)));
+            });
+            
+            // Prepare data for parallel coordinates
+            const dimensions = numericParams.map(param => {
+                const values = samples.map(sample => sample[param]);
+                return {
+                    label: param,
+                    values: values
+                };
+            });
+            
+            const trace = {
+                type: 'parcoords',
+                line: {
+                    color: 'rgba(0, 123, 255, 0.7)'
+                },
+                dimensions: dimensions
+            };
+            
+            const layout = {
+                title: 'Parallel Coordinates Plot'
+            };
+            
+            Plotly.newPlot(plotContainer, [trace], layout);
+        } else if (plotType === 'scatter') {
+            const paramX = document.getElementById('scatterXParam').value;
+            const paramY = document.getElementById('scatterYParam').value;
+            
+            const xValues = samples.map(sample => sample[paramX]);
+            const yValues = samples.map(sample => sample[paramY]);
+            
+            const trace = {
+                x: xValues,
+                y: yValues,
+                mode: 'markers',
+                type: 'scatter',
+                marker: {
+                    size: 8,
+                    color: 'rgba(0, 123, 255, 0.7)',
+                    line: {
+                        color: 'rgba(0, 123, 255, 1.0)',
+                        width: 1
+                    }
+                }
+            };
+            
+            const layout = {
+                title: `Scatter Plot: ${paramY} vs ${paramX}`,
+                xaxis: {
+                    title: paramX
+                },
+                yaxis: {
+                    title: paramY
+                },
+                hovermode: 'closest'
+            };
+            
+            Plotly.newPlot(plotContainer, [trace], layout);
+        }
+    }
+    
+    // Function to calculate correlation matrix
+    function calculateCorrelationMatrix(samples, paramNames) {
+        const n = paramNames.length;
+        const matrix = Array(n).fill().map(() => Array(n).fill(0));
+        
+        // Extract data arrays for each parameter
+        const paramArrays = {};
+        paramNames.forEach(param => {
+            paramArrays[param] = samples.map(sample => sample[param]);
+        });
+        
+        // Calculate correlation for each pair of parameters
+        for (let i = 0; i < n; i++) {
+            for (let j = 0; j < n; j++) {
+                const param1 = paramNames[i];
+                const param2 = paramNames[j];
+                
+                if (i === j) {
+                    matrix[i][j] = 1; // Correlation with self is 1
+                } else {
+                    matrix[i][j] = calculateCorrelation(paramArrays[param1], paramArrays[param2]);
+                }
+            }
+        }
+        
+        return matrix;
+    }
+    
+    // Function to calculate correlation between two arrays
+    function calculateCorrelation(x, y) {
+        const n = x.length;
+        
+        // Calculate means
+        const xMean = x.reduce((sum, val) => sum + val, 0) / n;
+        const yMean = y.reduce((sum, val) => sum + val, 0) / n;
+        
+        // Calculate covariance and variances
+        let covariance = 0;
+        let xVariance = 0;
+        let yVariance = 0;
+        
+        for (let i = 0; i < n; i++) {
+            const xDiff = x[i] - xMean;
+            const yDiff = y[i] - yMean;
+            
+            covariance += xDiff * yDiff;
+            xVariance += xDiff * xDiff;
+            yVariance += yDiff * yDiff;
+        }
+        
+        // Calculate correlation coefficient
+        if (xVariance === 0 || yVariance === 0) {
+            return 0; // Avoid division by zero
+        }
+        
+        return covariance / Math.sqrt(xVariance * yVariance);
+    }
+});
+</script>
+{% endblock %}
+

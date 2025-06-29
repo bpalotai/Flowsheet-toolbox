@@ -1,0 +1,958 @@
+{% extends "base.html" %}
+
+{% block title %}Batch Simulation Visualization | Simulation Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-graph-up text-primary me-2"></i>Batch Simulation Visualization</h1>
+    <a href="{{ url_for('simulations.batch_simulation_results', result_id=result.id) }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Results
+    </a>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Visualization Type</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="btn-group w-100 mb-3" role="group" aria-label="Visualization Type">
+                            <input type="radio" class="btn-check" name="vizType" id="vizTypeHeatmap" value="heatmap" checked>
+                            <label class="btn btn-outline-primary" for="vizTypeHeatmap">
+                                <i class="bi bi-grid-3x3"></i> Correlation Heatmap
+                            </label>
+                            
+                            <input type="radio" class="btn-check" name="vizType" id="vizTypeScatter" value="scatter">
+                            <label class="btn btn-outline-primary" for="vizTypeScatter">
+                                <i class="bi bi-scatter-chart"></i> Scatter Plot
+                            </label>
+                            
+                            <input type="radio" class="btn-check" name="vizType" id="vizTypeContribution" value="contribution">
+                            <label class="btn btn-outline-primary" for="vizTypeContribution">
+                                <i class="bi bi-bar-chart"></i> Contribution Analysis
+                            </label>
+                            
+                            <input type="radio" class="btn-check" name="vizType" id="vizTypeStatistics" value="statistics">
+                            <label class="btn btn-outline-primary" for="vizTypeStatistics">
+                                <i class="bi bi-table"></i> Statistics
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Parameter selection for Scatter Plot - hidden initially -->
+                <div id="scatterPlotParams" class="row" style="display: none;">
+                    <div class="col-md-5">
+                        <div class="form-group">
+                            <label for="inputParam">Input Parameter:</label>
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control" id="inputParamSearch" placeholder="Search inputs...">
+                                <button class="btn btn-outline-secondary" type="button" id="clearInputSearch">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                            <select class="form-select" id="inputParam" size="8">
+                                <!-- Input parameters will be loaded here -->
+                                <option value="" disabled>Loading parameters...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <div class="form-group">
+                            <label for="outputParam">Output Parameter:</label>
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control" id="outputParamSearch" placeholder="Search outputs...">
+                                <button class="btn btn-outline-secondary" type="button" id="clearOutputSearch">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                            <select class="form-select" id="outputParam" size="8">
+                                <!-- Output parameters will be loaded here -->
+                                <option value="" disabled>Loading parameters...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" id="generateScatterBtn" class="btn btn-primary w-100">
+                            <i class="bi bi-graph-up me-2"></i> Generate Plot
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Parameter selection for Contribution Analysis - hidden initially -->
+                <div id="contributionParams" class="row" style="display: none;">
+                    <div class="col-md-10">
+                        <div class="form-group">
+                            <label for="contributionOutputParam">Output Parameter:</label>
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control" id="contributionOutputSearch" placeholder="Search outputs...">
+                                <button class="btn btn-outline-secondary" type="button" id="clearContributionSearch">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                            <select class="form-select" id="contributionOutputParam" size="8">
+                                <!-- Output parameters will be loaded here -->
+                                <option value="" disabled>Loading parameters...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" id="generateContributionBtn" class="btn btn-primary w-100">
+                            <i class="bi bi-bar-chart me-2"></i> Generate Analysis
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- No parameter selection needed for heatmap or statistics -->
+                <div id="heatmapParams" class="row">
+                    <div class="col-md-10">
+                        <div class="alert alert-info mb-0">
+                            <i class="bi bi-info-circle me-2"></i>
+                            The correlation heatmap shows relationships between all numeric parameters. No additional configuration is needed.
+                        </div>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-center">
+                        <button type="button" id="generateHeatmapBtn" class="btn btn-primary w-100">
+                            <i class="bi bi-grid-3x3 me-2"></i> Update Heatmap
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- No parameter selection needed for statistics -->
+                <div id="statisticsParams" class="row" style="display: none;">
+                    <div class="col-md-10">
+                        <div class="alert alert-info mb-0">
+                            <i class="bi bi-info-circle me-2"></i>
+                            The statistics table shows summary statistics for all parameters. No additional configuration is needed.
+                        </div>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-center">
+                        <button type="button" id="generateStatisticsBtn" class="btn btn-primary w-100">
+                            <i class="bi bi-table me-2"></i> Show Statistics
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Visualization Container -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0" id="visualizationTitle">Correlation Heatmap</h5>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="downloadVisualizationBtn">
+                        <i class="bi bi-download"></i> Download
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="visualizationContainer">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-3">Loading visualization...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get result ID from URL
+        const urlParts = window.location.pathname.split('/');
+        const resultId = urlParts[urlParts.length - 1];
+        
+        // State variables
+        let allInputParams = [];
+        let allOutputParams = [];
+        let currentVisualization = 'heatmap';
+        let visualizationData = null;
+        
+        // DOM elements
+        const visualizationContainer = document.getElementById('visualizationContainer');
+        const visualizationTitle = document.getElementById('visualizationTitle');
+        const downloadVisualizationBtn = document.getElementById('downloadVisualizationBtn');
+        
+        // Parameter selection elements
+        const inputParamSelect = document.getElementById('inputParam');
+        const outputParamSelect = document.getElementById('outputParam');
+        const contributionOutputParamSelect = document.getElementById('contributionOutputParam');
+        
+        // Search elements
+        const inputParamSearch = document.getElementById('inputParamSearch');
+        const outputParamSearch = document.getElementById('outputParamSearch');
+        const contributionOutputSearch = document.getElementById('contributionOutputSearch');
+        const clearInputSearch = document.getElementById('clearInputSearch');
+        const clearOutputSearch = document.getElementById('clearOutputSearch');
+        const clearContributionSearch = document.getElementById('clearContributionSearch');
+        
+        // Button elements
+        const generateHeatmapBtn = document.getElementById('generateHeatmapBtn');
+        const generateScatterBtn = document.getElementById('generateScatterBtn');
+        const generateContributionBtn = document.getElementById('generateContributionBtn');
+        const generateStatisticsBtn = document.getElementById('generateStatisticsBtn');
+        
+        // Parameter containers
+        const heatmapParams = document.getElementById('heatmapParams');
+        const scatterPlotParams = document.getElementById('scatterPlotParams');
+        const contributionParams = document.getElementById('contributionParams');
+        const statisticsParams = document.getElementById('statisticsParams');
+        
+        // Load initial data and show heatmap
+        loadParameters().then(() => {
+            generateHeatmap();
+        });
+        
+        // Event listeners for visualization type selection
+        document.querySelectorAll('input[name="vizType"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                currentVisualization = this.value;
+                updateVisualizationInterface();
+            });
+        });
+        
+        // Event listeners for search functionality
+        inputParamSearch.addEventListener('input', function() {
+            filterSelect(inputParamSelect, this.value);
+        });
+        
+        outputParamSearch.addEventListener('input', function() {
+            filterSelect(outputParamSelect, this.value);
+        });
+        
+        contributionOutputSearch.addEventListener('input', function() {
+            filterSelect(contributionOutputParamSelect, this.value);
+        });
+        
+        clearInputSearch.addEventListener('click', function() {
+            inputParamSearch.value = '';
+            filterSelect(inputParamSelect, '');
+        });
+        
+        clearOutputSearch.addEventListener('click', function() {
+            outputParamSearch.value = '';
+            filterSelect(outputParamSelect, '');
+        });
+        
+        clearContributionSearch.addEventListener('click', function() {
+            contributionOutputSearch.value = '';
+            filterSelect(contributionOutputParamSelect, '');
+        });
+        
+        // Event listeners for generate buttons
+        generateHeatmapBtn.addEventListener('click', generateHeatmap);
+        generateScatterBtn.addEventListener('click', generateScatterPlot);
+        generateContributionBtn.addEventListener('click', generateContributionAnalysis);
+        generateStatisticsBtn.addEventListener('click', generateStatistics);
+        
+        // Download button event listener
+        downloadVisualizationBtn.addEventListener('click', downloadVisualization);
+        
+        // Function to update the visualization interface based on selected type
+        function updateVisualizationInterface() {
+            // Hide all parameter containers
+            heatmapParams.style.display = 'none';
+            scatterPlotParams.style.display = 'none';
+            contributionParams.style.display = 'none';
+            statisticsParams.style.display = 'none';
+            
+            // Show the appropriate container based on visualization type
+            switch (currentVisualization) {
+                case 'heatmap':
+                    heatmapParams.style.display = 'flex';
+                    visualizationTitle.textContent = 'Correlation Heatmap';
+                    break;
+                case 'scatter':
+                    scatterPlotParams.style.display = 'flex';
+                    visualizationTitle.textContent = 'Scatter Plot';
+                    break;
+                case 'contribution':
+                    contributionParams.style.display = 'flex';
+                    visualizationTitle.textContent = 'Contribution Analysis';
+                    break;
+                case 'statistics':
+                    statisticsParams.style.display = 'flex';
+                    visualizationTitle.textContent = 'Statistics';
+                    break;
+            }
+        }
+        
+        // Function to load parameters
+        async function loadParameters() {
+            try {
+                // Show loading state
+                inputParamSelect.innerHTML = '<option value="" disabled>Loading parameters...</option>';
+                outputParamSelect.innerHTML = '<option value="" disabled>Loading parameters...</option>';
+                contributionOutputParamSelect.innerHTML = '<option value="" disabled>Loading parameters...</option>';
+                
+                // Fetch parameters from API
+                const response = await fetch(`/sampling/batch/${resultId}/parameters`);
+                if (!response.ok) {
+                    throw new Error('Failed to load parameters');
+                }
+                
+                const data = await response.json();
+                
+                // Store parameters
+                allInputParams = data.input_params || [];
+                allOutputParams = data.output_params || [];
+                
+                // Populate input parameter select
+                inputParamSelect.innerHTML = '';
+                allInputParams.forEach(param => {
+                    const option = document.createElement('option');
+                    option.value = param;
+                    option.textContent = param;
+                    inputParamSelect.appendChild(option);
+                });
+                
+                // Populate output parameter selects
+                outputParamSelect.innerHTML = '';
+                contributionOutputParamSelect.innerHTML = '';
+                
+                allOutputParams.forEach(param => {
+                    // For scatter plot output select
+                    const option1 = document.createElement('option');
+                    option1.value = param;
+                    option1.textContent = param;
+                    outputParamSelect.appendChild(option1);
+                    
+                    // For contribution analysis output select
+                    const option2 = document.createElement('option');
+                    option2.value = param;
+                    option2.textContent = param;
+                    contributionOutputParamSelect.appendChild(option2);
+                });
+                
+                // Select first options by default
+                if (allInputParams.length > 0) {
+                    inputParamSelect.value = allInputParams[0];
+                }
+                
+                if (allOutputParams.length > 0) {
+                    outputParamSelect.value = allOutputParams[0];
+                    contributionOutputParamSelect.value = allOutputParams[0];
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('Error loading parameters:', error);
+                
+                // Show error message
+                inputParamSelect.innerHTML = '<option value="" disabled>Error loading parameters</option>';
+                outputParamSelect.innerHTML = '<option value="" disabled>Error loading parameters</option>';
+                contributionOutputParamSelect.innerHTML = '<option value="" disabled>Error loading parameters</option>';
+                
+                return false;
+            }
+        }
+        
+        // Function to filter select options
+        function filterSelect(selectElement, searchTerm) {
+            searchTerm = searchTerm.toLowerCase();
+            
+            for (let i = 0; i < selectElement.options.length; i++) {
+                const option = selectElement.options[i];
+                const text = option.textContent.toLowerCase();
+                
+                if (text.includes(searchTerm)) {
+                    option.style.display = '';
+                } else {
+                    option.style.display = 'none';
+                }
+            }
+        }
+        
+        // Function to generate heatmap
+        function generateHeatmap() {
+            // Show loading state
+            visualizationContainer.innerHTML = `
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-3">Generating correlation heatmap...</p>
+                </div>
+            `;
+            
+            // Fetch heatmap data
+            fetch(`/sampling/batch/${resultId}/visualize?type=heatmap`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to generate heatmap');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    visualizationData = data.correlation_heatmap;
+                    
+                    if (!visualizationData || !visualizationData.image) {
+                        visualizationContainer.innerHTML = `
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i>
+                                No correlation data available. Please check your data.
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    // Create image element
+                    const img = document.createElement('img');
+                    img.src = `data:image/png;base64,${visualizationData.image}`;
+                    img.className = 'img-fluid';
+                    img.alt = 'Correlation Heatmap';
+                    
+                    // Create container with description
+                    const container = document.createElement('div');
+                    container.className = 'text-center';
+                    
+                    // Add description if available
+                    if (visualizationData.description) {
+                        const description = document.createElement('p');
+                        description.className = 'text-muted mt-3';
+                        description.textContent = visualizationData.description;
+                        container.appendChild(description);
+                    }
+                    
+                    container.appendChild(img);
+                    visualizationContainer.innerHTML = '';
+                    visualizationContainer.appendChild(container);
+                })
+                .catch(error => {
+                    console.error('Error generating heatmap:', error);
+                    
+                    visualizationContainer.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            Error generating heatmap: ${error.message}
+                        </div>
+                    `;
+                });
+        }
+        
+        // Function to generate scatter plot
+        function generateScatterPlot() {
+            const inputParam = inputParamSelect.value;
+            const outputParam = outputParamSelect.value;
+            
+            if (!inputParam || !outputParam) {
+                alert('Please select both input and output parameters');
+                return;
+            }
+            
+            // Show loading state
+            visualizationContainer.innerHTML = `
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-3">Generating scatter plot...</p>
+                </div>
+            `;
+            
+            // Fetch scatter plot data
+            fetch(`/sampling/batch/${resultId}/visualize?type=scatter&input_params=${encodeURIComponent(inputParam)}&output_params=${encodeURIComponent(outputParam)}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to generate scatter plot');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log("Received data:", data); // Debug: Log the received data
+                    
+                    // Check if we have valid visualization data
+                    if (!data || !data.visualizations) {
+                        visualizationContainer.innerHTML = `
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                No visualization data returned from the server.
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    if (data.visualizations.length === 0) {
+                        visualizationContainer.innerHTML = `
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i>
+                                No visualization data available for the selected parameters.
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    // Get the first visualization (should be the only one)
+                    const viz = data.visualizations[0];
+                    
+                    // Store visualization data for download
+                    visualizationData = viz;
+                    
+                    // Check if there was an error
+                    if (viz.error) {
+                        visualizationContainer.innerHTML = `
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                Error generating visualization: ${viz.error}
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    // Check if the visualization has an image
+                    if (!viz.image) {
+                        visualizationContainer.innerHTML = `
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                The server returned a visualization without an image.
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    // Create container
+                    const container = document.createElement('div');
+                    container.className = 'text-center';
+                    
+                    // Add title
+                    const title = document.createElement('h5');
+                    title.className = 'mb-3';
+                    title.textContent = viz.title || `${outputParam} vs ${inputParam}`;
+                    container.appendChild(title);
+                    
+                    // Add correlation badge if available
+                    if (viz.correlation !== undefined && viz.correlation !== null) {
+                        const correlationBadge = document.createElement('div');
+                        correlationBadge.className = 'mb-3';
+                        
+                        const badgeClass = Math.abs(viz.correlation) > 0.7 ? 'bg-danger' : 
+                                        Math.abs(viz.correlation) > 0.4 ? 'bg-warning' : 'bg-info';
+                        
+                        correlationBadge.innerHTML = `
+                            <span class="badge ${badgeClass} p-2">
+                                Correlation: ${viz.correlation.toFixed(4)}
+                            </span>
+                        `;
+                        
+                        container.appendChild(correlationBadge);
+                    }
+                    
+                    // Create image element
+                    const img = document.createElement('img');
+                    img.src = `data:image/png;base64,${viz.image}`;
+                    img.className = 'img-fluid';
+                    img.alt = viz.title || 'Scatter Plot';
+                    container.appendChild(img);
+                    
+                    visualizationContainer.innerHTML = '';
+                    visualizationContainer.appendChild(container);
+                })
+                .catch(error => {
+                    console.error('Error generating scatter plot:', error);
+                    
+                    visualizationContainer.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            Error generating scatter plot: ${error.message}
+                        </div>
+                    `;
+                });
+        }
+
+        
+        // Function to generate contribution analysis
+        function generateContributionAnalysis() {
+            const outputParam = contributionOutputParamSelect.value;
+            
+            if (!outputParam) {
+                alert('Please select an output parameter');
+                return;
+            }
+            
+            // Show loading state
+            visualizationContainer.innerHTML = `
+                <div class="text-center py-5">
+                                        <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-3">Generating contribution analysis...</p>
+                </div>
+            `;
+            
+            // Fetch contribution analysis data
+            fetch(`/sampling/batch/${resultId}/visualize?type=contribution&output_params=${encodeURIComponent(outputParam)}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to generate contribution analysis');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (!data.contribution_analysis || data.contribution_analysis.length === 0) {
+                        visualizationContainer.innerHTML = `
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i>
+                                No contribution analysis available for the selected parameter.
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    // Find the contribution analysis for the selected output parameter
+                    const contribution = data.contribution_analysis.find(c => c.output === outputParam);
+                    
+                    if (!contribution) {
+                        visualizationContainer.innerHTML = `
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i>
+                                No contribution analysis available for ${outputParam}.
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    visualizationData = contribution;
+                    
+                    // Create image element
+                    const img = document.createElement('img');
+                    img.src = `data:image/png;base64,${visualizationData.image}`;
+                    img.className = 'img-fluid';
+                    img.alt = `Contribution to ${visualizationData.output}`;
+                    
+                    // Create container
+                    const container = document.createElement('div');
+                    container.className = 'text-center';
+                    
+                    // Add title
+                    const title = document.createElement('h5');
+                    title.className = 'mb-3';
+                    title.textContent = `Input Parameters Contribution to ${visualizationData.output}`;
+                    container.appendChild(title);
+                    
+                    // Add description
+                    const description = document.createElement('p');
+                    description.className = 'text-muted mb-3';
+                    description.textContent = 'This chart shows the correlation between input parameters and the selected output parameter, sorted by absolute correlation value.';
+                    container.appendChild(description);
+                    
+                    container.appendChild(img);
+                    
+                    // Add correlation table if available
+                    if (visualizationData.correlations && visualizationData.correlations.length > 0) {
+                        const tableContainer = document.createElement('div');
+                        tableContainer.className = 'mt-4';
+                        
+                        const tableTitle = document.createElement('h6');
+                        tableTitle.className = 'mb-3';
+                        tableTitle.textContent = 'Correlation Values';
+                        tableContainer.appendChild(tableTitle);
+                        
+                        const table = document.createElement('table');
+                        table.className = 'table table-sm table-striped';
+                        
+                        // Create table header
+                        const thead = document.createElement('thead');
+                        thead.innerHTML = `
+                            <tr>
+                                <th>Input Parameter</th>
+                                <th>Correlation</th>
+                            </tr>
+                        `;
+                        table.appendChild(thead);
+                        
+                        // Create table body
+                        const tbody = document.createElement('tbody');
+                        
+                        visualizationData.correlations.forEach(([param, corr]) => {
+                            const row = document.createElement('tr');
+                            
+                            // Format correlation value
+                            const corrValue = corr !== null ? corr.toFixed(4) : 'N/A';
+                            
+                            row.innerHTML = `
+                                <td>${param}</td>
+                                <td>${corrValue}</td>
+                            `;
+                            
+                            tbody.appendChild(row);
+                        });
+                        
+                        table.appendChild(tbody);
+                        tableContainer.appendChild(table);
+                        container.appendChild(tableContainer);
+                    }
+                    
+                    visualizationContainer.innerHTML = '';
+                    visualizationContainer.appendChild(container);
+                })
+                .catch(error => {
+                    console.error('Error generating contribution analysis:', error);
+                    
+                    visualizationContainer.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            Error generating contribution analysis: ${error.message}
+                        </div>
+                    `;
+                });
+        }
+        
+        // Function to generate statistics
+        function generateStatistics() {
+            // Show loading state
+            visualizationContainer.innerHTML = `
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-3">Generating statistics...</p>
+                </div>
+            `;
+            
+            // Fetch statistics data
+            fetch(`/sampling/batch/${resultId}/visualize?type=statistics`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to generate statistics');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (!data.statistics || Object.keys(data.statistics).length === 0) {
+                        visualizationContainer.innerHTML = `
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i>
+                                No statistics available.
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    visualizationData = data.statistics;
+                    
+                    // Create container
+                    const container = document.createElement('div');
+                    
+                    // Create tabs for input and output parameters
+                    const tabsContainer = document.createElement('div');
+                    tabsContainer.innerHTML = `
+                        <ul class="nav nav-tabs" id="statsTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="input-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#input-stats" type="button" role="tab" 
+                                        aria-controls="input-stats" aria-selected="true">
+                                    Input Parameters
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="output-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#output-stats" type="button" role="tab" 
+                                        aria-controls="output-stats" aria-selected="false">
+                                    Output Parameters
+                                </button>
+                            </li>
+                        </ul>
+                        <div class="tab-content pt-3" id="statsTabContent">
+                            <div class="tab-pane fade show active" id="input-stats" role="tabpanel" aria-labelledby="input-tab">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-striped" id="inputStatsTable">
+                                        <thead>
+                                            <tr>
+                                                <th>Parameter</th>
+                                                <th>Min</th>
+                                                <th>Max</th>
+                                                <th>Mean</th>
+                                                <th>Median</th>
+                                                <th>Std Dev</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="tab-pane fade" id="output-stats" role="tabpanel" aria-labelledby="output-tab">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-striped" id="outputStatsTable">
+                                        <thead>
+                                            <tr>
+                                                <th>Parameter</th>
+                                                <th>Min</th>
+                                                <th>Max</th>
+                                                <th>Mean</th>
+                                                <th>Median</th>
+                                                <th>Std Dev</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    container.appendChild(tabsContainer);
+                    
+                    // Populate statistics tables
+                    const inputStatsBody = tabsContainer.querySelector('#inputStatsTable tbody');
+                    const outputStatsBody = tabsContainer.querySelector('#outputStatsTable tbody');
+                    
+                    // Sort parameters alphabetically
+                    const sortedParams = Object.keys(visualizationData).sort();
+                    
+                    sortedParams.forEach(param => {
+                        const stats = visualizationData[param];
+                        const row = document.createElement('tr');
+                        
+                        row.innerHTML = `
+                            <td>${param}</td>
+                            <td>${stats.min !== null ? stats.min.toFixed(4) : 'N/A'}</td>
+                            <td>${stats.max !== null ? stats.max.toFixed(4) : 'N/A'}</td>
+                            <td>${stats.mean !== null ? stats.mean.toFixed(4) : 'N/A'}</td>
+                            <td>${stats.median !== null ? stats.median.toFixed(4) : 'N/A'}</td>
+                            <td>${stats.std !== null ? stats.std.toFixed(4) : 'N/A'}</td>
+                        `;
+                        
+                        // Add to appropriate table based on parameter type
+                        if (allInputParams.includes(param)) {
+                            inputStatsBody.appendChild(row.cloneNode(true));
+                        } else if (allOutputParams.includes(param)) {
+                            outputStatsBody.appendChild(row.cloneNode(true));
+                        } else {
+                            // If we can't determine the type, add to both
+                            inputStatsBody.appendChild(row.cloneNode(true));
+                            outputStatsBody.appendChild(row.cloneNode(true));
+                        }
+                    });
+                    
+                    // Add search functionality for tables
+                    const searchContainer = document.createElement('div');
+                    searchContainer.className = 'mb-3';
+                    searchContainer.innerHTML = `
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="statsSearch" placeholder="Search parameters...">
+                            <button class="btn btn-outline-secondary" type="button" id="clearStatsSearch">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        </div>
+                    `;
+                    
+                    container.insertBefore(searchContainer, tabsContainer);
+                    
+                    visualizationContainer.innerHTML = '';
+                    visualizationContainer.appendChild(container);
+                    
+                    // Add event listener for stats search
+                    const statsSearch = document.getElementById('statsSearch');
+                    const clearStatsSearch = document.getElementById('clearStatsSearch');
+                    
+                    if (statsSearch) {
+                        statsSearch.addEventListener('input', function() {
+                            const searchTerm = this.value.toLowerCase();
+                            
+                            // Search in both tables
+                            document.querySelectorAll('#inputStatsTable tbody tr, #outputStatsTable tbody tr').forEach(row => {
+                                const paramName = row.querySelector('td:first-child').textContent.toLowerCase();
+                                
+                                if (paramName.includes(searchTerm)) {
+                                    row.style.display = '';
+                                } else {
+                                    row.style.display = 'none';
+                                }
+                            });
+                        });
+                    }
+                    
+                    if (clearStatsSearch) {
+                        clearStatsSearch.addEventListener('click', function() {
+                            statsSearch.value = '';
+                            document.querySelectorAll('#inputStatsTable tbody tr, #outputStatsTable tbody tr').forEach(row => {
+                                row.style.display = '';
+                            });
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error generating statistics:', error);
+                    
+                    visualizationContainer.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            Error generating statistics: ${error.message}
+                        </div>
+                    `;
+                });
+        }
+        
+        // Function to download visualization
+        function downloadVisualization() {
+            if (!visualizationData) {
+                alert('No visualization data available to download');
+                return;
+            }
+            
+            // Handle different visualization types
+            if (currentVisualization === 'heatmap' || 
+                currentVisualization === 'scatter' || 
+                currentVisualization === 'contribution') {
+                
+                // For image-based visualizations
+                const img = visualizationContainer.querySelector('img');
+                if (img) {
+                    const link = document.createElement('a');
+                    link.href = img.src;
+                    
+                    // Generate filename based on visualization type
+                    let filename = `batch_${resultId}_`;
+                    
+                    if (currentVisualization === 'heatmap') {
+                        filename += 'correlation_heatmap';
+                    } else if (currentVisualization === 'scatter') {
+                        const inputParam = inputParamSelect.value;
+                        const outputParam = outputParamSelect.value;
+                        filename += `scatter_${inputParam}_vs_${outputParam}`;
+                    } else if (currentVisualization === 'contribution') {
+                        const outputParam = contributionOutputParamSelect.value;
+                        filename += `contribution_to_${outputParam}`;
+                    }
+                    
+                    filename += '.png';
+                    
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            } else if (currentVisualization === 'statistics') {
+                // For statistics, export as CSV
+                let csvContent = 'Parameter,Min,Max,Mean,Median,Std Dev\n';
+                
+                Object.entries(visualizationData).forEach(([param, stats]) => {
+                    csvContent += `"${param}",${stats.min},${stats.max},${stats.mean},${stats.median},${stats.std}\n`;
+                });
+                
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `batch_${resultId}_statistics.csv`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+    });
+</script>
+{% endblock %}
+

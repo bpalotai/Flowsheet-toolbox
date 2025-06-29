@@ -1,0 +1,2084 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-sliders text-primary me-2"></i>Configure Parameters: {{ case.name }}</h1>
+    <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Case
+    </a>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Parameter Configuration</h5>
+    </div>
+    <div class="card-body">
+        <div class="mb-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h5>Configuration Mode</h5>
+                    <p class="text-muted">Choose how you want to configure parameters</p>
+                </div>
+                <div class="btn-group" role="group">
+                    <button type="button" id="manualModeBtn" class="btn btn-primary active">
+                        <i class="bi bi-pencil"></i> Manual Configuration
+                    </button>
+                    <button type="button" id="exploreModeBtn" class="btn btn-outline-primary">
+                        <i class="bi bi-search"></i> Explore Simulation
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manual Configuration Section -->
+        <div id="manualConfigSection">
+            <div class="alert alert-info mb-4">
+                <i class="bi bi-info-circle me-2"></i> 
+                You are in manual configuration mode. Add parameters manually or switch to explore mode to load parameters from the simulation.
+            </div>
+            
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Input Parameters</h5>
+                            <button type="button" class="btn btn-sm btn-primary" id="addManualInputBtn">
+                                <i class="bi bi-plus"></i> Add Input
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="list-group" id="selectedInputs">
+                                <div class="list-group-item text-center text-muted">No input parameters selected</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Output Parameters</h5>
+                            <button type="button" class="btn btn-sm btn-primary" id="addManualOutputBtn">
+                                <i class="bi bi-plus"></i> Add Output
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="list-group" id="selectedOutputs">
+                                <div class="list-group-item text-center text-muted">No output parameters selected</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-grid gap-2">
+                <button type="button" class="btn btn-success" id="saveParameters">
+                    <i class="bi bi-save"></i> Save Parameter Configuration
+                </button>
+            </div>
+        </div>
+
+        <!-- Explore Mode Section -->
+        <div id="exploreConfigSection" style="display: none;">
+            <div id="loadingAlert" class="alert alert-info">
+                <div class="d-flex align-items-center">
+                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                    <div>Loading model information...</div>
+                </div>
+            </div>
+            
+            <div id="errorAlert" class="alert alert-danger d-none">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                <span id="errorMessage">Error loading model information.</span>
+                <div class="mt-2">
+                    <button type="button" class="btn btn-sm btn-outline-danger" id="retryLoadBtn">
+                        <i class="bi bi-arrow-clockwise"></i> Retry
+                    </button>
+                </div>
+            </div>
+            
+            <div id="parameterConfig" style="display: none;">
+                <ul class="nav nav-tabs mb-3" id="parameterTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="spreadsheet-tab" data-bs-toggle="tab" data-bs-target="#spreadsheet" type="button" role="tab" aria-controls="spreadsheet" aria-selected="true">
+                            <i class="bi bi-table me-1"></i> Spreadsheets
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="materialStream-tab" data-bs-toggle="tab" data-bs-target="#materialStream" type="button" role="tab" aria-controls="materialStream" aria-selected="false">
+                            <i class="bi bi-water me-1"></i> Material Streams
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="energyStream-tab" data-bs-toggle="tab" data-bs-target="#energyStream" type="button" role="tab" aria-controls="energyStream" aria-selected="false">
+                            <i class="bi bi-lightning me-1"></i> Energy Streams
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="selected-tab" data-bs-toggle="tab" data-bs-target="#selected" type="button" role="tab" aria-controls="selected" aria-selected="false">
+                            <i class="bi bi-check-circle me-1"></i> Selected Parameters
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content" id="parameterTabsContent">
+                    <!-- Spreadsheet Tab -->
+                    <div class="tab-pane fade show active" id="spreadsheet" role="tabpanel" aria-labelledby="spreadsheet-tab">
+                        <div class="mb-3">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                <input type="text" class="form-control" id="spreadsheetSearch" placeholder="Search spreadsheets...">
+                            </div>
+                        </div>
+                        <div id="spreadsheetList" class="parameter-list"></div>
+                    </div>
+                    
+                    <!-- Material Stream Tab -->
+                    <div class="tab-pane fade" id="materialStream" role="tabpanel" aria-labelledby="materialStream-tab">
+                        <div class="mb-3">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                <input type="text" class="form-control" id="materialStreamSearch" placeholder="Search material streams...">
+                            </div>
+                        </div>
+                        <div id="materialStreamList" class="parameter-list"></div>
+                    </div>
+                    
+                    <!-- Energy Stream Tab -->
+                    <div class="tab-pane fade" id="energyStream" role="tabpanel" aria-labelledby="energyStream-tab">
+                        <div class="mb-3">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                <input type="text" class="form-control" id="energyStreamSearch" placeholder="Search energy streams...">
+                            </div>
+                        </div>
+                        <div id="energyStreamList" class="parameter-list"></div>
+                    </div>
+                    
+                    <!-- Selected Parameters Tab -->
+                    <div class="tab-pane fade" id="selected" role="tabpanel" aria-labelledby="selected-tab">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h5>Input Parameters</h5>
+                                <div class="list-group" id="selectedExploreInputs">
+                                    <div class="list-group-item text-center text-muted">No input parameters selected</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h5>Output Parameters</h5>
+                                <div class="list-group" id="selectedExploreOutputs">
+                                    <div class="list-group-item text-center text-muted">No output parameters selected</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="button" class="btn btn-success" id="saveExploreParameters">
+                                <i class="bi bi-save"></i> Save Parameter Configuration
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Parameter Configuration Modal (for Explore mode) -->
+<div class="modal fade" id="parameterModal" tabindex="-1" aria-labelledby="parameterModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="parameterModalLabel">Configure Parameter</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="parameterForm">
+                    <input type="hidden" id="paramId">
+                    <input type="hidden" id="paramSource">
+
+                    <div class="mb-3">
+                        <label for="paramName" class="form-label">Parameter Name</label>
+                        <input type="text" class="form-control" id="paramName" required>
+                        <div class="form-text">Enter a descriptive name for this parameter</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Parameter Type</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="paramType" id="inputType" value="input" checked>
+                            <label class="form-check-label" for="inputType">
+                                Input Parameter
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="paramType" id="outputType" value="output">
+                            <label class="form-check-label" for="outputType">
+                                Output Parameter
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Spreadsheet-specific fields -->
+                    <div id="spreadsheetFields" style="display: none;">
+                        <div class="mb-3">
+                            <label for="spreadsheetName" class="form-label">Spreadsheet Name</label>
+                            <input type="text" class="form-control" id="spreadsheetName" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label for="cellAddress" class="form-label">Cell Address</label>
+                            <input type="text" class="form-control" id="cellAddress" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label for="spreadsheetUOM" class="form-label">Unit of Measurement</label>
+                            <input type="text" class="form-control" id="spreadsheetUOM" placeholder="e.g., kg/h, C, bar">
+                        </div>
+                    </div>
+                    
+                    <!-- Material Stream-specific fields -->
+                    <div id="materialStreamFields" style="display: none;">
+                        <div class="mb-3">
+                            <label for="streamName" class="form-label">Stream Name</label>
+                            <input type="text" class="form-control" id="streamName" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label for="parameterType" class="form-label">Parameter Type</label>
+                            <select class="form-select" id="parameterType">
+                                <option value="Property">Stream Property</option>
+                                <option value="MassFrac">Mass Fractions</option>
+                                <option value="MassFlow">Mass Flows</option>
+                                <option value="MolarFlow">Molar Flows</option>
+                            </select>
+                        </div>
+                        <div id="propertyFields">
+                            <div class="mb-3">
+                                <label for="propertyName" class="form-label">Property Name</label>
+                                <input type="text" class="form-control" id="propertyName">
+                            </div>
+                            <div class="mb-3">
+                                <label for="propertyUOM" class="form-label">Unit of Measurement</label>
+                                <input type="text" class="form-control" id="propertyUOM" placeholder="e.g., kg/h, C, bar">
+                            </div>
+                        </div>
+                        <div id="componentFields" style="display: none;">
+                            <div class="mb-3">
+                                <label for="componentList" class="form-label">Components</label>
+                                <select class="form-select" id="componentList" multiple>
+                                    <!-- Components will be loaded dynamically -->
+                                </select>
+                                <div class="form-text">Hold Ctrl/Cmd to select multiple components. Leave empty to include all.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="scaleFactor" class="form-label">Scale Factor</label>
+                                <input type="number" class="form-control" id="scaleFactor" value="1.0" step="0.1">
+                                <div class="form-text">Multiply values by this factor (e.g., 100 for percentage).</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Energy Stream-specific fields -->
+                    <div id="energyStreamFields" style="display: none;">
+                        <div class="mb-3">
+                            <label for="energyStreamName" class="form-label">Stream Name</label>
+                            <input type="text" class="form-control" id="energyStreamName" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label for="energyPropertyName" class="form-label">Property Name</label>
+                            <input type="text" class="form-control" id="energyPropertyName" value="HeatFlow">
+                        </div>
+                        <div class="mb-3">
+                            <label for="energyUOM" class="form-label">Unit of Measurement</label>
+                            <input type="text" class="form-control" id="energyUOM" placeholder="e.g., kJ/h, kW">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveParameterBtn">Add Parameter</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Manual Parameter Modal -->
+<div class="modal fade" id="manualParameterModal" tabindex="-1" aria-labelledby="manualParameterModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="manualParameterModalLabel">Add Parameter Manually</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="manualParameterForm">
+                    <input type="hidden" id="manualParamType" value="input">
+                    
+                    <div class="mb-3">
+                        <label for="manualParamName" class="form-label">Parameter Name</label>
+                        <input type="text" class="form-control" id="manualParamName" required>
+                        <div class="form-text">Enter a unique name for this parameter</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="manualParamSource" class="form-label">Source Type</label>
+                        <select class="form-select" id="manualParamSource">
+                            <option value="Spreadsheet">Spreadsheet</option>
+                            <option value="MaterialStream">Material Stream</option>
+                            <option value="EnergyStream">Energy Stream</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Spreadsheet fields -->
+                    <div id="manualSpreadsheetFields">
+                        <div class="mb-3">
+                            <label for="manualSpreadsheetName" class="form-label">Spreadsheet Name</label>
+                            <input type="text" class="form-control" id="manualSpreadsheetName">
+                        </div>
+                        <div class="mb-3">
+                            <label for="manualCellAddress" class="form-label">Cell Address</label>
+                            <input type="text" class="form-control" id="manualCellAddress" placeholder="e.g., A1, B2">
+                        </div>
+                        <div class="mb-3">
+                            <label for="manualSpreadsheetUOM" class="form-label">Unit of Measurement</label>
+                            <input type="text" class="form-control" id="manualSpreadsheetUOM" placeholder="e.g., kg/h, C, bar">
+                        </div>
+                    </div>
+                    
+                    <!-- Material Stream fields -->
+                    <div id="manualMaterialStreamFields" style="display: none;">
+                        <div class="mb-3">
+                            <label for="manualStreamName" class="form-label">Stream Name</label>
+                            <input type="text" class="form-control" id="manualStreamName">
+                        </div>
+                        <div class="mb-3">
+                            <label for="manualParameterType" class="form-label">Parameter Type</label>
+                            <select class="form-select" id="manualParameterType">
+                                <option value="Property">Stream Property</option>
+                                <option value="MassFrac">Mass Fractions</option>
+                                <option value="MassFlow">Mass Flows</option>
+                                <option value="MolarFlow">Molar Flows</option>
+                            </select>
+                        </div>
+                        <div id="manualPropertyFields">
+                            <div class="mb-3">
+                                <label for="manualPropertyName" class="form-label">Property Name</label>
+                                <input type="text" class="form-control" id="manualPropertyName" placeholder="e.g., Temperature, Pressure">
+                            </div>
+                            <div class="mb-3">
+                                <label for="manualPropertyUOM" class="form-label">Unit of Measurement</label>
+                                <input type="text" class="form-control" id="manualPropertyUOM" placeholder="e.g., kg/h, C, bar">
+                            </div>
+                        </div>
+                        <div id="manualComponentFields" style="display: none;">
+                            <div class="mb-3">
+                                <label for="manualComponents" class="form-label">Components (comma-separated)</label>
+                                <input type="text" class="form-control" id="manualComponents" placeholder="e.g., H2O, CO2, N2">
+                                <div class="form-text">Leave empty to include all components</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="manualScaleFactor" class="form-label">Scale Factor</label>
+                                <input type="number" class="form-control" id="manualScaleFactor" value="1.0" step="0.1">
+                                <div class="form-text">Multiply values by this factor (e.g., 100 for percentage)</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Energy Stream fields -->
+                    <div id="manualEnergyStreamFields" style="display: none;">
+                        <div class="mb-3">
+                            <label for="manualEnergyStreamName" class="form-label">Stream Name</label>
+                            <input type="text" class="form-control" id="manualEnergyStreamName">
+                        </div>
+                        <div class="mb-3">
+                            <label for="manualEnergyPropertyName" class="form-label">Property Name</label>
+                            <input type="text" class="form-control" id="manualEnergyPropertyName" value="HeatFlow">
+                        </div>
+                        <div class="mb-3">
+                            <label for="manualEnergyUOM" class="form-label">Unit of Measurement</label>
+                            <input type="text" class="form-control" id="manualEnergyUOM" placeholder="e.g., kJ/h, kW">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveManualParameterBtn">Add Parameter</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+const caseId = {{ case.id }};
+let modelInfo = null;
+let selectedParameters = {
+    inputs: [],
+    outputs: []
+};
+let modelLoaded = false;
+
+// Load existing parameters if available
+{% if case.parameters %}
+const existingParams = {{ case.parameters|tojson }};
+loadExistingParameters(existingParams);
+updateParameterCards();
+{% endif %}
+
+// Initialize modals
+const parameterModal = new bootstrap.Modal(document.getElementById('parameterModal'));
+const manualParameterModal = new bootstrap.Modal(document.getElementById('manualParameterModal'));
+
+// Mode switching
+document.getElementById('manualModeBtn').addEventListener('click', function() {
+    switchToManualMode();
+});
+
+document.getElementById('exploreModeBtn').addEventListener('click', function() {
+    switchToExploreMode();
+});
+
+// Add event listeners for hide/show toggles if the elements exist
+const hideSelectedSpreadsheets = document.getElementById('hideSelectedSpreadsheets');
+if (hideSelectedSpreadsheets) {
+    hideSelectedSpreadsheets.addEventListener('change', function() {
+        document.getElementById('spreadsheetList').classList.toggle('hide-selected', this.checked);
+    });
+}
+
+const hideSelectedMaterialStreams = document.getElementById('hideSelectedMaterialStreams');
+if (hideSelectedMaterialStreams) {
+    hideSelectedMaterialStreams.addEventListener('change', function() {
+        document.getElementById('materialStreamList').classList.toggle('hide-selected', this.checked);
+    });
+}
+
+const hideSelectedEnergyStreams = document.getElementById('hideSelectedEnergyStreams');
+if (hideSelectedEnergyStreams) {
+    hideSelectedEnergyStreams.addEventListener('change', function() {
+        document.getElementById('energyStreamList').classList.toggle('hide-selected', this.checked);
+    });
+}
+
+// Function to check if a parameter is already selected
+function isParameterSelected(paramId) {
+    // Check if the parameter is in the inputs list
+    const inInputs = selectedParameters.inputs.some(param => param.id === paramId);
+    
+    // Check if the parameter is in the outputs list
+    const inOutputs = selectedParameters.outputs.some(param => param.id === paramId);
+    
+    // Return true if it's in either list
+    return inInputs || inOutputs;
+}
+
+// Add a function to update parameter cards
+function updateParameterCards() {
+    // Update all parameter cards to reflect selection status
+    document.querySelectorAll('.parameter-card').forEach(card => {
+        const paramId = card.dataset.id;
+        const isSelected = isParameterSelected(paramId);
+        
+        // Update data attribute
+        card.dataset.selected = isSelected;
+        
+        // Update class
+        if (isSelected) {
+            card.classList.add('parameter-selected');
+        } else {
+            card.classList.remove('parameter-selected');
+        }
+        
+        // Update badge
+        let badgeElement = card.querySelector('.badge');
+        if (isSelected && !badgeElement) {
+            const textElement = card.querySelector('.small.text-muted');
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-info ms-1';
+            badge.textContent = 'Already Selected';
+            textElement.parentNode.insertBefore(badge, textElement.nextSibling);
+        } else if (!isSelected && badgeElement && badgeElement.textContent === 'Already Selected') {
+            badgeElement.remove();
+        }
+        
+        // Update button
+        const button = card.querySelector('.add-parameter');
+        if (button) {
+            button.disabled = isSelected;
+            button.innerHTML = `<i class="bi bi-${isSelected ? 'check' : 'plus'}"></i>`;
+        }
+    });
+}
+
+// Function to switch to manual mode
+function switchToManualMode() {
+    document.getElementById('manualModeBtn').classList.add('active');
+    document.getElementById('manualModeBtn').classList.remove('btn-outline-primary');
+    document.getElementById('manualModeBtn').classList.add('btn-primary');
+    
+    document.getElementById('exploreModeBtn').classList.remove('active');
+    document.getElementById('exploreModeBtn').classList.add('btn-outline-primary');
+    document.getElementById('exploreModeBtn').classList.remove('btn-primary');
+    
+    document.getElementById('manualConfigSection').style.display = 'block';
+    document.getElementById('exploreConfigSection').style.display = 'none';
+    
+    // Update selected parameters display for manual mode
+    updateSelectedParametersDisplay();
+}
+
+// Function to switch to explore mode
+function switchToExploreMode() {
+    document.getElementById('exploreModeBtn').classList.add('active');
+    document.getElementById('exploreModeBtn').classList.remove('btn-outline-primary');
+    document.getElementById('exploreModeBtn').classList.add('btn-primary');
+    
+    document.getElementById('manualModeBtn').classList.remove('active');
+    document.getElementById('manualModeBtn').classList.add('btn-outline-primary');
+    document.getElementById('manualModeBtn').classList.remove('btn-primary');
+    
+    document.getElementById('manualConfigSection').style.display = 'none';
+    document.getElementById('exploreConfigSection').style.display = 'block';
+    
+    // Load model info if not already loaded
+    if (!modelLoaded) {
+        fetchModelInfo();
+    }
+    
+    // Update selected parameters display for explore mode
+    updateSelectedExploreParametersDisplay();
+}
+
+// Manual parameter buttons
+document.getElementById('addManualInputBtn').addEventListener('click', function() {
+    openManualParameterModal('input');
+});
+
+document.getElementById('addManualOutputBtn').addEventListener('click', function() {
+    openManualParameterModal('output');
+});
+
+// Save manual parameter button
+document.getElementById('saveManualParameterBtn').addEventListener('click', function() {
+    addManualParameter();
+    manualParameterModal.hide();
+});
+
+// Event listener for manual parameter source type selection
+document.getElementById('manualParamSource').addEventListener('change', function() {
+    toggleManualParameterFields();
+});
+
+// Event listener for manual parameter type selection
+document.getElementById('manualParameterType').addEventListener('change', function() {
+    toggleManualComponentFields();
+});
+
+// Event listeners for parameter type selection in explore mode
+document.getElementById('parameterType').addEventListener('change', function() {
+    toggleComponentFields();
+});
+
+// Event listener for save parameter button in explore mode
+document.getElementById('saveParameterBtn').addEventListener('click', function() {
+    addParameter();
+    parameterModal.hide();
+});
+
+// Event listener for save all parameters button in manual mode
+document.getElementById('saveParameters').addEventListener('click', function() {
+    saveAllParameters();
+});
+
+// Event listener for save all parameters button in explore mode
+document.getElementById('saveExploreParameters').addEventListener('click', function() {
+    saveAllParameters();
+});
+
+// Retry button for loading model info
+document.getElementById('retryLoadBtn').addEventListener('click', function() {
+    document.getElementById('errorAlert').classList.add('d-none');
+    document.getElementById('loadingAlert').classList.remove('d-none');
+    fetchModelInfo();
+});
+
+// Search functionality
+document.getElementById('spreadsheetSearch').addEventListener('input', function() {
+    filterParameters('spreadsheet', this.value);
+});
+
+document.getElementById('materialStreamSearch').addEventListener('input', function() {
+    filterParameters('materialStream', this.value);
+});
+
+document.getElementById('energyStreamSearch').addEventListener('input', function() {
+    filterParameters('energyStream', this.value);
+});
+
+// Function to fetch model information
+function fetchModelInfo() {
+    document.getElementById('loadingAlert').classList.remove('d-none');
+    document.getElementById('parameterConfig').style.display = 'none';
+    
+    fetch(`/parameters/api/explore/${caseId}`)
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Failed to load model information');
+        }
+        return response.json();
+    })
+    .then(data => {
+        modelInfo = data;
+        modelLoaded = true;
+        document.getElementById('loadingAlert').classList.add('d-none');
+        document.getElementById('parameterConfig').style.display = 'block';
+
+        // Populate parameter lists
+        populateSpreadsheets(data.Spreadsheets);
+        populateMaterialStreams(data.MaterialStreams);
+        populateEnergyStreams(data.EnergyStreams);
+        updateParameterCards();
+        
+        // Update selected parameters display
+        updateSelectedExploreParametersDisplay();
+    })
+    .catch(error => {
+        document.getElementById('loadingAlert').classList.add('d-none');
+        document.getElementById('errorAlert').classList.remove('d-none');
+        document.getElementById('errorMessage').textContent = error.message;
+    });
+}
+
+// Function to open manual parameter modal
+function openManualParameterModal(type) {
+    // Reset form
+    document.getElementById('manualParameterForm').reset();
+    
+    // Set parameter type
+    document.getElementById('manualParamType').value = type;
+    document.getElementById('manualParameterModalLabel').textContent = type === 'input' ? 'Add Input Parameter' : 'Add Output Parameter';
+    
+    // Show default fields
+    document.getElementById('manualSpreadsheetFields').style.display = 'block';
+    document.getElementById('manualMaterialStreamFields').style.display = 'none';
+    document.getElementById('manualEnergyStreamFields').style.display = 'none';
+    document.getElementById('manualPropertyFields').style.display = 'block';
+    document.getElementById('manualComponentFields').style.display = 'none';
+    
+    // Show the modal
+    manualParameterModal.show();
+}
+
+// Function to toggle manual parameter fields based on source type
+function toggleManualParameterFields() {
+    const sourceType = document.getElementById('manualParamSource').value;
+    
+    // Hide all fields
+    document.getElementById('manualSpreadsheetFields').style.display = 'none';
+    document.getElementById('manualMaterialStreamFields').style.display = 'none';
+    document.getElementById('manualEnergyStreamFields').style.display = 'none';
+    
+    // Show fields based on source type
+    if (sourceType === 'Spreadsheet') {
+        document.getElementById('manualSpreadsheetFields').style.display = 'block';
+    } else if (sourceType === 'MaterialStream') {
+        document.getElementById('manualMaterialStreamFields').style.display = 'block';
+        toggleManualComponentFields();
+    } else if (sourceType === 'EnergyStream') {
+        document.getElementById('manualEnergyStreamFields').style.display = 'block';
+    }
+}
+
+// Function to toggle manual component fields based on parameter type
+function toggleManualComponentFields() {
+    const parameterType = document.getElementById('manualParameterType').value;
+    
+    if (parameterType === 'Property') {
+        document.getElementById('manualPropertyFields').style.display = 'block';
+        document.getElementById('manualComponentFields').style.display = 'none';
+    } else {
+        document.getElementById('manualPropertyFields').style.display = 'none';
+        document.getElementById('manualComponentFields').style.display = 'block';
+    }
+}
+
+// Function to add a manual parameter
+function addManualParameter() {
+    const paramType = document.getElementById('manualParamType').value;
+    const paramName = document.getElementById('manualParamName').value;
+    const paramSource = document.getElementById('manualParamSource').value;
+    
+    // Validate required fields
+    if (!paramName) {
+        alert('Parameter name is required');
+        return;
+    }
+    
+    // Create parameter object based on source type
+    let parameter = {
+        id: `manual_${Date.now()}`,
+        name: paramName,
+        source: paramSource,
+        type: paramType
+    };
+    
+    if (paramSource === 'Spreadsheet') {
+        parameter.spreadsheetName = document.getElementById('manualSpreadsheetName').value;
+        parameter.cell = document.getElementById('manualCellAddress').value;
+        parameter.uom = document.getElementById('manualSpreadsheetUOM').value;
+        
+        // Validate required fields
+        if (!parameter.spreadsheetName || !parameter.cell) {
+            alert('Spreadsheet name and cell address are required');
+            return;
+        }
+    } else if (paramSource === 'MaterialStream') {
+        parameter.streamName = document.getElementById('manualStreamName').value;
+        parameter.parameterType = document.getElementById('manualParameterType').value;
+        
+        // Validate required fields
+        if (!parameter.streamName) {
+            alert('Stream name is required');
+            return;
+        }
+        
+        if (parameter.parameterType === 'Property') {
+            parameter.propertyName = document.getElementById('manualPropertyName').value;
+            parameter.uom = document.getElementById('manualPropertyUOM').value;
+            
+            // Validate required fields
+            if (!parameter.propertyName) {
+                alert('Property name is required');
+                return;
+            }
+        } else {
+            const componentsStr = document.getElementById('manualComponents').value;
+            parameter.components = componentsStr ? componentsStr.split(',').map(c => c.trim()) : [];
+            parameter.scaleFactor = parseFloat(document.getElementById('manualScaleFactor').value);
+        }
+    } else if (paramSource === 'EnergyStream') {
+        parameter.streamName = document.getElementById('manualEnergyStreamName').value;
+        parameter.propertyName = document.getElementById('manualEnergyPropertyName').value;
+        parameter.uom = document.getElementById('manualEnergyUOM').value;
+        
+        // Validate required fields
+        if (!parameter.streamName) {
+            alert('Stream name is required');
+            return;
+        }
+    }
+    
+    // Add to appropriate list
+    if (paramType === 'input') {
+        selectedParameters.inputs.push(parameter);
+    } else {
+        selectedParameters.outputs.push(parameter);
+    }
+    
+    // Update the selected parameters display
+    updateSelectedParametersDisplay();
+}
+
+// Function to populate spreadsheet parameters
+function populateSpreadsheets(spreadsheets) {
+    const container = document.getElementById('spreadsheetList');
+    container.innerHTML = '';
+
+    if (spreadsheets.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No spreadsheets found in the model.</div>';
+        return;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'row g-3';
+
+    spreadsheets.forEach(sheet => {
+        const sheetCard = document.createElement('div');
+        sheetCard.className = 'col-md-6 col-lg-4';
+        sheetCard.innerHTML = `
+        <div class="card h-100">
+            <div class="card-header">
+                <h6 class="mb-0">${sheet.Name}</h6>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                ${sheet.Cells.map(cell => {
+                    const paramId = `${sheet.Name}_${cell.Address}`;
+                    const isSelected = isParameterSelected(paramId);
+                    return `
+                    <div class="list-group-item parameter-card ${isSelected ? 'parameter-selected' : ''}" 
+                        data-id="${paramId}"
+                        data-source="Spreadsheet"
+                        data-name="${sheet.Name}_${cell.Address}"
+                        data-spreadsheet="${sheet.Name}"
+                        data-cell="${cell.Address}"
+                        data-value="${typeof cell.Value === 'number' ? cell.Value.toFixed(8) : cell.Value}"
+                        data-selected="${isSelected}">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${cell.Address}</strong>
+                                <div class="small text-muted">Value: ${typeof cell.Value === 'number' ? cell.Value.toFixed(8) : cell.Value}</div>
+                                ${isSelected ? '<span class="badge bg-info">Already Selected</span>' : ''}
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary add-parameter" ${isSelected ? 'disabled' : ''}>
+                                <i class="bi bi-${isSelected ? 'check' : 'plus'}"></i>
+                            </button>
+                        </div>
+                    </div>
+                    `;
+                }).join('')}
+                </div>
+            </div>
+        </div>
+        `;
+        row.appendChild(sheetCard);
+    });
+
+    container.appendChild(row);
+
+    // Add event listeners to parameter cards
+    container.querySelectorAll('.parameter-card').forEach(card => {
+        card.querySelector('.add-parameter').addEventListener('click', function(e) {
+            e.stopPropagation();
+            openParameterModal(card.dataset);
+        });
+    });
+}
+
+// Function to populate material stream parameters
+function populateMaterialStreams(streams) {
+    const container = document.getElementById('materialStreamList');
+    container.innerHTML = '';
+
+    if (streams.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No material streams found in the model.</div>';
+        return;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'row g-3';
+
+    streams.forEach(stream => {
+        const streamCard = document.createElement('div');
+        streamCard.className = 'col-md-6 col-lg-4';
+        
+        // Create HTML for properties
+        let propertiesHtml = stream.Properties.map(prop => {
+            const paramId = `${stream.Name}_${prop.Name}`;
+            const isSelected = isParameterSelected(paramId);
+            const displayValue = typeof prop.Value === 'number' ? prop.Value.toFixed(4) : prop.Value;
+            
+            return `
+            <div class="list-group-item parameter-card ${prop.CanModify ? 'border-success' : ''} ${isSelected ? 'parameter-selected' : ''}" 
+                 data-id="${paramId}"
+                 data-source="MaterialStream"
+                 data-name="${stream.Name}_${prop.Name}"
+                 data-stream="${stream.Name}"
+                 data-property="${prop.Name}"
+                 data-value="${displayValue}"
+                 data-can-modify="${prop.CanModify || false}"
+                 data-selected="${isSelected}"
+                 data-uom="${prop.UOM || ''}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>${prop.Name}</strong>
+                        <div class="small text-muted">Value: ${displayValue} ${prop.UOM || ''}</div>
+                        ${prop.CanModify ? 
+                          '<span class="badge bg-success">Modifiable</span>' : 
+                          '<span class="badge bg-secondary">Read-only</span>'}
+                        ${isSelected ? '<span class="badge bg-info ms-1">Already Selected</span>' : ''}
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary add-parameter" ${isSelected ? 'disabled' : ''}>
+                        <i class="bi bi-${isSelected ? 'check' : 'plus'}"></i>
+                    </button>
+                </div>
+            </div>
+            `;
+        }).join('');
+        
+        // Create HTML for components section if components exist
+        let componentsHtml = '';
+        if (stream.Components && stream.Components.length > 0) {
+            // Mass Fractions
+            const massFracId = `${stream.Name}_MassFrac`;
+            const massFracSelected = isParameterSelected(massFracId);
+            
+            // Mass Flows
+            const massFlowId = `${stream.Name}_MassFlow`;
+            const massFlowSelected = isParameterSelected(massFlowId);
+            
+            // Molar Flows
+            const molarFlowId = `${stream.Name}_MolarFlow`;
+            const molarFlowSelected = isParameterSelected(molarFlowId);
+            
+            componentsHtml = `
+            <h6>Components</h6>
+            <div class="list-group list-group-flush">
+                <div class="list-group-item parameter-card ${stream.MassFractionCompCanModify ? 'border-success' : ''} ${massFracSelected ? 'parameter-selected' : ''}" 
+                     data-id="${massFracId}"
+                     data-source="MaterialStream"
+                     data-name="${stream.Name}_MassFrac"
+                     data-stream="${stream.Name}"
+                     data-parameter-type="MassFrac"
+                     data-can-modify="${stream.MassFractionCompCanModify || false}"
+                     data-selected="${massFracSelected}"
+                     data-components="${stream.Components.map(comp => comp.Name).join(',')}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>Mass Fractions</strong>
+                            <div class="small text-muted">${stream.Components.length} components</div>
+                            ${stream.MassFractionCompCanModify ? 
+                              '<span class="badge bg-success">Modifiable</span>' : 
+                              '<span class="badge bg-secondary">Read-only</span>'}
+                            ${massFracSelected ? '<span class="badge bg-info ms-1">Already Selected</span>' : ''}
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary add-parameter" ${massFracSelected ? 'disabled' : ''}>
+                            <i class="bi bi-${massFracSelected ? 'check' : 'plus'}"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="list-group-item parameter-card ${stream.MassFlowCompCanModify ? 'border-success' : ''} ${massFlowSelected ? 'parameter-selected' : ''}" 
+                     data-id="${massFlowId}"
+                     data-source="MaterialStream"
+                     data-name="${stream.Name}_MassFlow"
+                     data-stream="${stream.Name}"
+                     data-parameter-type="MassFlow"
+                     data-can-modify="${stream.MassFlowCompCanModify || false}"
+                     data-selected="${massFlowSelected}"
+                     data-components="${stream.Components.map(comp => comp.Name).join(',')}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>Mass Flows</strong>
+                            <div class="small text-muted">${stream.Components.length} components</div>
+                            ${stream.MassFlowCompCanModify ? 
+                              '<span class="badge bg-success">Modifiable</span>' : 
+                              '<span class="badge bg-secondary">Read-only</span>'}
+                            ${massFlowSelected ? '<span class="badge bg-info ms-1">Already Selected</span>' : ''}
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary add-parameter" ${massFlowSelected ? 'disabled' : ''}>
+                            <i class="bi bi-${massFlowSelected ? 'check' : 'plus'}"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="list-group-item parameter-card ${stream.MolarFlowCompCanModify ? 'border-success' : ''} ${molarFlowSelected ? 'parameter-selected' : ''}" 
+                     data-id="${molarFlowId}"
+                     data-source="MaterialStream"
+                     data-name="${stream.Name}_MolarFlow"
+                     data-stream="${stream.Name}"
+                     data-parameter-type="MolarFlow"
+                     data-can-modify="${stream.MolarFlowCompCanModify || false}"
+                     data-selected="${molarFlowSelected}"
+                     data-components="${stream.Components.map(comp => comp.Name).join(',')}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>Molar Flows</strong>
+                            <div class="small text-muted">${stream.Components.length} components</div>
+                            ${stream.MolarFlowCompCanModify ? 
+                              '<span class="badge bg-success">Modifiable</span>' : 
+                              '<span class="badge bg-secondary">Read-only</span>'}
+                            ${molarFlowSelected ? '<span class="badge bg-info ms-1">Already Selected</span>' : ''}
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary add-parameter" ${molarFlowSelected ? 'disabled' : ''}>
+                            <i class="bi bi-${molarFlowSelected ? 'check' : 'plus'}"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            `;
+        }
+        
+        // Combine all HTML
+        streamCard.innerHTML = `
+        <div class="card h-100">
+            <div class="card-header">
+                <h6 class="mb-0">${stream.Name}</h6>
+            </div>
+            <div class="card-body">
+                <h6>Properties</h6>
+                <div class="list-group list-group-flush mb-3">
+                    ${propertiesHtml}
+                </div>
+                ${componentsHtml}
+            </div>
+        </div>
+        `;
+        
+        row.appendChild(streamCard);
+    });
+
+    container.appendChild(row);
+
+    // Add event listeners to parameter cards
+    container.querySelectorAll('.parameter-card').forEach(card => {
+        card.querySelector('.add-parameter').addEventListener('click', function(e) {
+            e.stopPropagation();
+            openParameterModal(card.dataset);
+        });
+    });
+}
+
+// Function to populate energy stream parameters
+function populateEnergyStreams(streams) {
+    const container = document.getElementById('energyStreamList');
+    container.innerHTML = '';
+
+    if (streams.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No energy streams found in the model.</div>';
+        return;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'row g-3';
+
+    streams.forEach(stream => {
+        const streamCard = document.createElement('div');
+        streamCard.className = 'col-md-6 col-lg-4';
+        
+        // Create HTML for properties
+        let propertiesHtml = stream.Properties.map(prop => {
+            const paramId = `${stream.Name}_${prop.Name}`;
+            const isSelected = isParameterSelected(paramId);
+            const displayValue = typeof prop.Value === 'number' ? prop.Value.toFixed(4) : prop.Value;
+            
+            return `
+            <div class="list-group-item parameter-card ${prop.CanModify ? 'border-success' : ''} ${isSelected ? 'parameter-selected' : ''}" 
+                 data-id="${paramId}"
+                 data-source="EnergyStream"
+                 data-name="${stream.Name}_${prop.Name}"
+                 data-stream="${stream.Name}"
+                 data-property="${prop.Name}"
+                 data-value="${displayValue}"
+                 data-can-modify="${prop.CanModify || false}"
+                 data-selected="${isSelected}"
+                 data-uom="${prop.UOM || ''}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>${prop.Name}</strong>
+                        <div class="small text-muted">Value: ${displayValue} ${prop.UOM || ''}</div>
+                        ${prop.CanModify ? 
+                          '<span class="badge bg-success">Modifiable</span>' : 
+                          '<span class="badge bg-secondary">Read-only</span>'}
+                        ${isSelected ? '<span class="badge bg-info ms-1">Already Selected</span>' : ''}
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary add-parameter" ${isSelected ? 'disabled' : ''}>
+                        <i class="bi bi-${isSelected ? 'check' : 'plus'}"></i>
+                    </button>
+                </div>
+            </div>
+            `;
+        }).join('');
+        
+        // Combine all HTML
+        streamCard.innerHTML = `
+        <div class="card h-100">
+            <div class="card-header">
+                <h6 class="mb-0">${stream.Name}</h6>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    ${propertiesHtml}
+                </div>
+            </div>
+        </div>
+        `;
+        
+        row.appendChild(streamCard);
+    });
+
+    container.appendChild(row);
+
+    // Add event listeners to parameter cards
+    container.querySelectorAll('.parameter-card').forEach(card => {
+        card.querySelector('.add-parameter').addEventListener('click', function(e) {
+            e.stopPropagation();
+            openParameterModal(card.dataset);
+        });
+    });
+}
+
+
+// Function to open parameter configuration modal
+function openParameterModal(data) {
+    // Reset form
+    document.getElementById('parameterForm').reset();
+
+    // Set common fields
+    document.getElementById('paramId').value = data.id;
+    document.getElementById('paramSource').value = data.source;
+    document.getElementById('paramName').value = data.name;
+
+    // Hide all specific fields
+    document.getElementById('spreadsheetFields').style.display = 'none';
+    document.getElementById('materialStreamFields').style.display = 'none';
+    document.getElementById('energyStreamFields').style.display = 'none';
+    document.getElementById('propertyFields').style.display = 'none';
+    document.getElementById('componentFields').style.display = 'none';
+
+    // Determine if parameter can be modified
+    let canModify = false;
+    
+    // For spreadsheets, we don't have CanModify info, so default to true
+    if (data.source === 'Spreadsheet') {
+        canModify = true;
+    } 
+    // For material stream properties
+    else if (data.source === 'MaterialStream') {
+        if (data.parameterType) {
+            // For component parameters, use the specific CanModify attribute
+            if (data.parameterType === 'MassFrac') {
+                canModify = data.canModify === "true" || data.canModify === true;
+            } else if (data.parameterType === 'MassFlow') {
+                canModify = data.canModify === "true" || data.canModify === true;
+            } else if (data.parameterType === 'MolarFlow') {
+                canModify = data.canModify === "true" || data.canModify === true;
+            }
+        } else {
+            // For regular properties
+            canModify = data.canModify === "true" || data.canModify === true;
+        }
+    } 
+    // For energy stream properties
+    else if (data.source === 'EnergyStream') {
+        canModify = data.canModify === "true" || data.canModify === true;
+    }
+
+    // Enable/disable input type based on modifiability
+    document.getElementById('inputType').disabled = !canModify;
+    
+    // If not modifiable, force output type
+    if (!canModify) {
+        document.getElementById('outputType').checked = true;
+    } else {
+        // Default to input type if modifiable
+        document.getElementById('inputType').checked = true;
+    }
+    
+    // Add a note about modifiability
+    const modalBody = document.querySelector('#parameterModal .modal-body');
+    const existingNote = document.getElementById('modifiabilityNote');
+    if (existingNote) {
+        existingNote.remove();
+    }
+    
+    if (!canModify) {
+        const note = document.createElement('div');
+        note.id = 'modifiabilityNote';
+        note.className = 'alert alert-warning mb-3';
+        note.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2"></i> This parameter is read-only in HYSYS and can only be used as an output.';
+        modalBody.insertBefore(note, modalBody.firstChild);
+    }
+
+    // Show fields based on source type
+    if (data.source === 'Spreadsheet') {
+        document.getElementById('spreadsheetFields').style.display = 'block';
+        document.getElementById('spreadsheetName').value = data.spreadsheet;
+        document.getElementById('cellAddress').value = data.cell;
+    } else if (data.source === 'MaterialStream') {
+        document.getElementById('materialStreamFields').style.display = 'block';
+        document.getElementById('streamName').value = data.stream;
+
+        if (data.parameterType) {
+            // Component-based parameter
+            document.getElementById('parameterType').value = data.parameterType;
+            document.getElementById('componentFields').style.display = 'block';
+
+            // Populate component list
+            const componentList = document.getElementById('componentList');
+            componentList.innerHTML = '';
+
+            if (data.components) {
+                const components = data.components.split(',');
+                components.forEach(comp => {
+                    const option = document.createElement('option');
+                    option.value = comp;
+                    option.textContent = comp;
+                    componentList.appendChild(option);
+                });
+            }
+        } else {
+            // Property-based parameter
+            document.getElementById('parameterType').value = 'Property';
+            document.getElementById('propertyFields').style.display = 'block';
+            document.getElementById('propertyName').value = data.property;
+            document.getElementById('propertyUOM').value = data.uom || '';
+        }
+    } else if (data.source === 'EnergyStream') {
+        document.getElementById('energyStreamFields').style.display = 'block';
+        document.getElementById('energyStreamName').value = data.stream;
+        document.getElementById('energyPropertyName').value = data.property;
+        document.getElementById('energyUOM').value = data.uom || '';
+    }
+
+    // Show the modal
+    parameterModal.show();
+}
+
+// Function to toggle component fields based on parameter type
+function toggleComponentFields() {
+    const parameterType = document.getElementById('parameterType').value;
+
+    if (parameterType === 'Property') {
+        document.getElementById('propertyFields').style.display = 'block';
+        document.getElementById('componentFields').style.display = 'none';
+    } else {
+        document.getElementById('propertyFields').style.display = 'none';
+        document.getElementById('componentFields').style.display = 'block';
+    }
+}
+
+// Function to add a parameter to the selected list
+function addParameter() {
+    const paramId = document.getElementById('paramId').value;
+    const paramSource = document.getElementById('paramSource').value;
+    const paramName = document.getElementById('paramName').value;
+    const paramType = document.querySelector('input[name="paramType"]:checked').value;
+
+    // Create parameter object based on source type
+    let parameter = {
+        id: paramId,
+        name: paramName,
+        source: paramSource,
+        type: paramType
+    };
+
+    if (paramSource === 'Spreadsheet') {
+        parameter.spreadsheetName = document.getElementById('spreadsheetName').value;
+        parameter.cell = document.getElementById('cellAddress').value;
+        parameter.uom = document.getElementById('spreadsheetUOM').value;
+    } else if (paramSource === 'MaterialStream') {
+        parameter.streamName = document.getElementById('streamName').value;
+        parameter.parameterType = document.getElementById('parameterType').value;
+
+        if (parameter.parameterType === 'Property') {
+            parameter.propertyName = document.getElementById('propertyName').value;
+            parameter.uom = document.getElementById('propertyUOM').value;
+        } else {
+            // Get selected components
+            const componentList = document.getElementById('componentList');
+            const selectedComponents = Array.from(componentList.selectedOptions).map(option => option.value);
+            parameter.components = selectedComponents;
+            parameter.scaleFactor = parseFloat(document.getElementById('scaleFactor').value);
+        }
+    } else if (paramSource === 'EnergyStream') {
+        parameter.streamName = document.getElementById('energyStreamName').value;
+        parameter.propertyName = document.getElementById('energyPropertyName').value;
+        parameter.uom = document.getElementById('energyUOM').value;
+    }
+
+    // Add to appropriate list
+    if (paramType === 'input') {
+        // Check if already exists
+        const existingIndex = selectedParameters.inputs.findIndex(p => p.id === paramId);
+        if (existingIndex >= 0) {
+            selectedParameters.inputs[existingIndex] = parameter;
+        } else {
+            selectedParameters.inputs.push(parameter);
+        }
+    } else {
+        // Check if already exists
+        const existingIndex = selectedParameters.outputs.findIndex(p => p.id === paramId);
+        if (existingIndex >= 0) {
+            selectedParameters.outputs[existingIndex] = parameter;
+        } else {
+            selectedParameters.outputs.push(parameter);
+        }
+    }
+
+    // Update the selected parameters display
+    updateSelectedParametersDisplay();
+    updateSelectedExploreParametersDisplay();
+    // After adding the parameter, update the parameter cards
+    updateParameterCards();
+}
+
+// Function to update the display of selected parameters in manual mode
+function updateSelectedParametersDisplay() {
+    const inputsContainer = document.getElementById('selectedInputs');
+    const outputsContainer = document.getElementById('selectedOutputs');
+
+    // Update inputs
+    if (selectedParameters.inputs.length === 0) {
+        inputsContainer.innerHTML = '<div class="list-group-item text-center text-muted">No input parameters selected</div>';
+    } else {
+        inputsContainer.innerHTML = selectedParameters.inputs.map(param => `
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>${param.name}</strong>
+                        <div class="small text-muted">
+                            ${getParameterDescription(param)}
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-outline-secondary edit-parameter" data-id="${param.id}" data-type="input">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger remove-parameter" data-id="${param.id}" data-type="input">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    // Update outputs
+    if (selectedParameters.outputs.length === 0) {
+        outputsContainer.innerHTML = '<div class="list-group-item text-center text-muted">No output parameters selected</div>';
+    } else {
+        outputsContainer.innerHTML = selectedParameters.outputs.map(param => `
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>${param.name}</strong>
+                        <div class="small text-muted">
+                            ${getParameterDescription(param)}
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-outline-secondary edit-parameter" data-id="${param.id}" data-type="output">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger remove-parameter" data-id="${param.id}" data-type="output">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    // Add event listeners for edit and remove buttons
+    document.querySelectorAll('#selectedInputs .edit-parameter, #selectedOutputs .edit-parameter').forEach(button => {
+        button.addEventListener('click', function() {
+            const paramId = this.dataset.id;
+            const paramType = this.dataset.type;
+            
+            // Find the parameter
+            const param = paramType === 'input' 
+                ? selectedParameters.inputs.find(p => p.id === paramId)
+                : selectedParameters.outputs.find(p => p.id === paramId);
+            
+            if (param) {
+                // Check if it's a manual parameter
+                if (param.id.startsWith('manual_')) {
+                    openManualParameterModalForEdit(param);
+                } else {
+                    // Open the modal for editing
+                    openParameterModalForEdit(param);
+                }
+            }
+            // Update the parameter cards
+            updateParameterCards();
+        });
+    });
+    
+    document.querySelectorAll('#selectedInputs .remove-parameter, #selectedOutputs .remove-parameter').forEach(button => {
+        button.addEventListener('click', function() {
+            const paramId = this.dataset.id;
+            const paramType = this.dataset.type;
+            
+            // Remove the parameter
+            if (paramType === 'input') {
+                selectedParameters.inputs = selectedParameters.inputs.filter(p => p.id !== paramId);
+            } else {
+                selectedParameters.outputs = selectedParameters.outputs.filter(p => p.id !== paramId);
+            }
+            
+            // Update the display
+            updateSelectedParametersDisplay();
+            updateSelectedExploreParametersDisplay();
+        });
+    });
+}
+
+// Function to update the display of selected parameters in explore mode
+function updateSelectedExploreParametersDisplay() {
+    const inputsContainer = document.getElementById('selectedExploreInputs');
+    const outputsContainer = document.getElementById('selectedExploreOutputs');
+
+    // Update inputs
+    if (selectedParameters.inputs.length === 0) {
+        inputsContainer.innerHTML = '<div class="list-group-item text-center text-muted">No input parameters selected</div>';
+    } else {
+        inputsContainer.innerHTML = selectedParameters.inputs.map(param => `
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>${param.name}</strong>
+                        <div class="small text-muted">
+                            ${getParameterDescription(param)}
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-outline-secondary edit-explore-parameter" data-id="${param.id}" data-type="input">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger remove-explore-parameter" data-id="${param.id}" data-type="input">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    // Update outputs
+    if (selectedParameters.outputs.length === 0) {
+        outputsContainer.innerHTML = '<div class="list-group-item text-center text-muted">No output parameters selected</div>';
+    } else {
+        outputsContainer.innerHTML = selectedParameters.outputs.map(param => `
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>${param.name}</strong>
+                        <div class="small text-muted">
+                            ${getParameterDescription(param)}
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-outline-secondary edit-explore-parameter" data-id="${param.id}" data-type="output">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger remove-explore-parameter" data-id="${param.id}" data-type="output">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    // Add event listeners for edit and remove buttons
+    document.querySelectorAll('#selectedExploreInputs .edit-explore-parameter, #selectedExploreOutputs .edit-explore-parameter').forEach(button => {
+        button.addEventListener('click', function() {
+            const paramId = this.dataset.id;
+            const paramType = this.dataset.type;
+            
+            // Find the parameter
+            const param = paramType === 'input' 
+                ? selectedParameters.inputs.find(p => p.id === paramId)
+                : selectedParameters.outputs.find(p => p.id === paramId);
+            
+            if (param) {
+                // Check if it's a manual parameter
+                if (param.id.startsWith('manual_')) {
+                    openManualParameterModalForEdit(param);
+                } else {
+                    // Open the modal for editing
+                    openParameterModalForEdit(param);
+                }
+            }
+        });
+    });
+    
+    document.querySelectorAll('#selectedExploreInputs .remove-explore-parameter, #selectedExploreOutputs .remove-explore-parameter').forEach(button => {
+        button.addEventListener('click', function() {
+            const paramId = this.dataset.id;
+            const paramType = this.dataset.type;
+            
+            // Remove the parameter
+            if (paramType === 'input') {
+                selectedParameters.inputs = selectedParameters.inputs.filter(p => p.id !== paramId);
+            } else {
+                selectedParameters.outputs = selectedParameters.outputs.filter(p => p.id !== paramId);
+            }
+            
+            // Update the display
+            updateSelectedParametersDisplay();
+            updateSelectedExploreParametersDisplay();
+            updateParameterCards();
+        });
+    });
+}
+
+// Function to get a description of a parameter
+function getParameterDescription(param) {
+    if (param.source === 'Spreadsheet') {
+        return `Spreadsheet: ${param.spreadsheetName}, Cell: ${param.cell}${param.uom ? `, UOM: ${param.uom}` : ''}`;
+    } else if (param.source === 'MaterialStream') {
+        if (param.parameterType === 'Property') {
+            return `Stream: ${param.streamName}, Property: ${param.propertyName}${param.uom ? `, UOM: ${param.uom}` : ''}`;
+        } else {
+            return `Stream: ${param.streamName}, Type: ${param.parameterType}${param.components && param.components.length ? `, Components: ${param.components.length} selected` : ''}`;
+        }
+    } else if (param.source === 'EnergyStream') {
+        return `Stream: ${param.streamName}, Property: ${param.propertyName}${param.uom ? `, UOM: ${param.uom}` : ''}`;
+    }
+    return '';
+}
+
+// Function to open parameter modal for editing
+function openParameterModalForEdit(param) {
+    // Set common fields
+    document.getElementById('paramId').value = param.id;
+    document.getElementById('paramSource').value = param.source;
+    document.getElementById('paramName').value = param.name;
+    
+    // Set parameter type
+    if (param.type === 'input') {
+        document.getElementById('inputType').checked = true;
+    } else {
+        document.getElementById('outputType').checked = true;
+    }
+    
+    // Hide all specific fields
+    document.getElementById('spreadsheetFields').style.display = 'none';
+    document.getElementById('materialStreamFields').style.display = 'none';
+    document.getElementById('energyStreamFields').style.display = 'none';
+    document.getElementById('propertyFields').style.display = 'none';
+    document.getElementById('componentFields').style.display = 'none';
+    
+    // Show fields based on source type
+    if (param.source === 'Spreadsheet') {
+        document.getElementById('spreadsheetFields').style.display = 'block';
+        document.getElementById('spreadsheetName').value = param.spreadsheetName;
+        document.getElementById('cellAddress').value = param.cell;
+        document.getElementById('spreadsheetUOM').value = param.uom || '';
+    } else if (param.source === 'MaterialStream') {
+        document.getElementById('materialStreamFields').style.display = 'block';
+        document.getElementById('streamName').value = param.streamName;
+        document.getElementById('parameterType').value = param.parameterType;
+        
+        if (param.parameterType === 'Property') {
+            document.getElementById('propertyFields').style.display = 'block';
+            document.getElementById('propertyName').value = param.propertyName;
+            document.getElementById('propertyUOM').value = param.uom || '';
+        } else {
+            document.getElementById('componentFields').style.display = 'block';
+            
+            // Populate component list
+            const componentList = document.getElementById('componentList');
+            componentList.innerHTML = '';
+            
+            // Find the stream in the model info
+            if (modelInfo) {
+                const stream = modelInfo.MaterialStreams.find(s => s.Name === param.streamName);
+                if (stream && stream.Components) {
+                    stream.Components.forEach(comp => {
+                        const option = document.createElement('option');
+                        option.value = comp.Name;
+                        option.textContent = comp.Name;
+                        
+                        // Select if in the parameter's components
+                        if (param.components && param.components.includes(comp.Name)) {
+                            option.selected = true;
+                        }
+                        
+                        componentList.appendChild(option);
+                    });
+                }
+            }
+            
+            document.getElementById('scaleFactor').value = param.scaleFactor || 1.0;
+        }
+    } else if (param.source === 'EnergyStream') {
+        document.getElementById('energyStreamFields').style.display = 'block';
+        document.getElementById('energyStreamName').value = param.streamName;
+        document.getElementById('energyPropertyName').value = param.propertyName;
+        document.getElementById('energyUOM').value = param.uom || '';
+    }
+    
+    // Update save button text
+    document.getElementById('saveParameterBtn').textContent = 'Update Parameter';
+    
+    // Show the modal
+    parameterModal.show();
+}
+
+// Function to open manual parameter modal for editing
+function openManualParameterModalForEdit(param) {
+    // Set parameter type
+    document.getElementById('manualParamType').value = param.type;
+    document.getElementById('manualParameterModalLabel').textContent = param.type === 'input' ? 'Edit Input Parameter' : 'Edit Output Parameter';
+    
+    // Set common fields
+    document.getElementById('manualParamName').value = param.name;
+    document.getElementById('manualParamSource').value = param.source;
+    
+    // Hide all fields
+    document.getElementById('manualSpreadsheetFields').style.display = 'none';
+    document.getElementById('manualMaterialStreamFields').style.display = 'none';
+    document.getElementById('manualEnergyStreamFields').style.display = 'none';
+    document.getElementById('manualPropertyFields').style.display = 'none';
+    document.getElementById('manualComponentFields').style.display = 'none';
+    
+    // Show fields based on source type
+    if (param.source === 'Spreadsheet') {
+        document.getElementById('manualSpreadsheetFields').style.display = 'block';
+        document.getElementById('manualSpreadsheetName').value = param.spreadsheetName;
+        document.getElementById('manualCellAddress').value = param.cell;
+        document.getElementById('manualSpreadsheetUOM').value = param.uom || '';
+    } else if (param.source === 'MaterialStream') {
+        document.getElementById('manualMaterialStreamFields').style.display = 'block';
+        document.getElementById('manualStreamName').value = param.streamName;
+        document.getElementById('manualParameterType').value = param.parameterType;
+        
+        if (param.parameterType === 'Property') {
+            document.getElementById('manualPropertyFields').style.display = 'block';
+            document.getElementById('manualPropertyName').value = param.propertyName;
+            document.getElementById('manualPropertyUOM').value = param.uom || '';
+        } else {
+            document.getElementById('manualComponentFields').style.display = 'block';
+            document.getElementById('manualComponents').value = param.components ? param.components.join(', ') : '';
+            document.getElementById('manualScaleFactor').value = param.scaleFactor || 1.0;
+        }
+    } else if (param.source === 'EnergyStream') {
+        document.getElementById('manualEnergyStreamFields').style.display = 'block';
+        document.getElementById('manualEnergyStreamName').value = param.streamName;
+        document.getElementById('manualEnergyPropertyName').value = param.propertyName;
+        document.getElementById('manualEnergyUOM').value = param.uom || '';
+    }
+    
+    // Update save button text and add parameter ID as data attribute
+    const saveBtn = document.getElementById('saveManualParameterBtn');
+    saveBtn.textContent = 'Update Parameter';
+    saveBtn.dataset.paramId = param.id;
+    
+    // Change event handler for update
+    saveBtn.onclick = function() {
+        updateManualParameter(param.id);
+        manualParameterModal.hide();
+    };
+    
+    // Show the modal
+    manualParameterModal.show();
+}
+
+// Function to update a manual parameter
+function updateManualParameter(paramId) {
+    const paramType = document.getElementById('manualParamType').value;
+    const paramName = document.getElementById('manualParamName').value;
+    const paramSource = document.getElementById('manualParamSource').value;
+    
+    // Validate required fields
+    if (!paramName) {
+        alert('Parameter name is required');
+        return;
+    }
+    
+    // Create parameter object based on source type
+    let parameter = {
+        id: paramId,
+        name: paramName,
+        source: paramSource,
+        type: paramType
+    };
+    
+    if (paramSource === 'Spreadsheet') {
+        parameter.spreadsheetName = document.getElementById('manualSpreadsheetName').value;
+        parameter.cell = document.getElementById('manualCellAddress').value;
+        parameter.uom = document.getElementById('manualSpreadsheetUOM').value;
+        
+        // Validate required fields
+        if (!parameter.spreadsheetName || !parameter.cell) {
+            alert('Spreadsheet name and cell address are required');
+            return;
+        }
+    } else if (paramSource === 'MaterialStream') {
+        parameter.streamName = document.getElementById('manualStreamName').value;
+        parameter.parameterType = document.getElementById('manualParameterType').value;
+        
+        // Validate required fields
+        if (!parameter.streamName) {
+            alert('Stream name is required');
+            return;
+        }
+        
+        if (parameter.parameterType === 'Property') {
+            parameter.propertyName = document.getElementById('manualPropertyName').value;
+            parameter.uom = document.getElementById('manualPropertyUOM').value;
+            
+            // Validate required fields
+            if (!parameter.propertyName) {
+                alert('Property name is required');
+                return;
+            }
+        } else {
+            const componentsStr = document.getElementById('manualComponents').value;
+            parameter.components = componentsStr ? componentsStr.split(',').map(c => c.trim()) : [];
+            parameter.scaleFactor = parseFloat(document.getElementById('manualScaleFactor').value);
+        }
+    } else if (paramSource === 'EnergyStream') {
+        parameter.streamName = document.getElementById('manualEnergyStreamName').value;
+        parameter.propertyName = document.getElementById('manualEnergyPropertyName').value;
+        parameter.uom = document.getElementById('manualEnergyUOM').value;
+        
+        // Validate required fields
+        if (!parameter.streamName) {
+            alert('Stream name is required');
+            return;
+        }
+    }
+    
+    // Update in the appropriate list
+    if (paramType === 'input') {
+        const index = selectedParameters.inputs.findIndex(p => p.id === paramId);
+        if (index >= 0) {
+            selectedParameters.inputs[index] = parameter;
+        }
+    } else {
+        const index = selectedParameters.outputs.findIndex(p => p.id === paramId);
+        if (index >= 0) {
+            selectedParameters.outputs[index] = parameter;
+        }
+    }
+    
+    // Update the selected parameters display
+    updateSelectedParametersDisplay();
+    updateSelectedExploreParametersDisplay();
+    
+    // Reset the save button
+    const saveBtn = document.getElementById('saveManualParameterBtn');
+    saveBtn.textContent = 'Add Parameter';
+    delete saveBtn.dataset.paramId;
+    saveBtn.onclick = function() {
+        addManualParameter();
+        manualParameterModal.hide();
+    };
+}
+
+// Function to filter parameters based on search term
+function filterParameters(type, searchTerm) {
+    searchTerm = searchTerm.toLowerCase();
+    
+    if (type === 'spreadsheet') {
+        const cards = document.querySelectorAll('#spreadsheetList .parameter-card');
+        cards.forEach(card => {
+            const spreadsheetName = card.dataset.spreadsheet.toLowerCase();
+            const cellAddress = card.dataset.cell.toLowerCase();
+            
+            if (spreadsheetName.includes(searchTerm) || cellAddress.includes(searchTerm)) {
+                card.closest('.col-md-6').style.display = '';
+            } else {
+                card.closest('.col-md-6').style.display = 'none';
+            }
+        });
+    } else if (type === 'materialStream') {
+        const cards = document.querySelectorAll('#materialStreamList .parameter-card');
+        cards.forEach(card => {
+            const streamName = card.dataset.stream.toLowerCase();
+            const propertyName = (card.dataset.property || '').toLowerCase();
+            const parameterType = (card.dataset.parameterType || '').toLowerCase();
+            const isModifiable = card.dataset.canModify === "true";
+            
+            // Include "modifiable" or "read-only" in search terms
+            if (streamName.includes(searchTerm) || 
+                propertyName.includes(searchTerm) || 
+                parameterType.includes(searchTerm) ||
+                (isModifiable && "modifiable".includes(searchTerm)) ||
+                (!isModifiable && "readonly".includes(searchTerm)) ||
+                (!isModifiable && "read-only".includes(searchTerm))) {
+                
+                // Find the closest card container
+                let container = card;
+                while (container && !container.classList.contains('col-md-6') && !container.classList.contains('col-lg-4')) {
+                    container = container.parentElement;
+                }
+                
+                if (container) {
+                    container.style.display = '';
+                }
+            } else {
+                // Find the closest card container
+                let container = card;
+                while (container && !container.classList.contains('col-md-6') && !container.classList.contains('col-lg-4')) {
+                    container = container.parentElement;
+                }
+                
+                if (container) {
+                    container.style.display = 'none';
+                }
+            }
+        });
+    } else if (type === 'energyStream') {
+        const cards = document.querySelectorAll('#energyStreamList .parameter-card');
+        cards.forEach(card => {
+            const streamName = card.dataset.stream.toLowerCase();
+            const propertyName = (card.dataset.property || '').toLowerCase();
+            const isModifiable = card.dataset.canModify === "true";
+            
+            // Include "modifiable" or "read-only" in search terms
+            if (streamName.includes(searchTerm) || 
+                propertyName.includes(searchTerm) ||
+                (isModifiable && "modifiable".includes(searchTerm)) ||
+                (!isModifiable && "readonly".includes(searchTerm)) ||
+                (!isModifiable && "read-only".includes(searchTerm))) {
+                
+                // Find the closest card container
+                let container = card;
+                while (container && !container.classList.contains('col-md-6') && !container.classList.contains('col-lg-4')) {
+                    container = container.parentElement;
+                }
+                
+                if (container) {
+                    container.style.display = '';
+                }
+            } else {
+                // Find the closest card container
+                let container = card;
+                while (container && !container.classList.contains('col-md-6') && !container.classList.contains('col-lg-4')) {
+                    container = container.parentElement;
+                }
+                
+                if (container) {
+                    container.style.display = 'none';
+                }
+            }
+        });
+    }
+}
+
+// Function to save all parameters to the server
+function saveAllParameters() {
+    const saveBtn = document.getElementById('saveParameters');
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...';
+    
+    // Convert parameters to the format expected by the API
+    const parameters = [];
+    
+    // Add input parameters
+    selectedParameters.inputs.forEach(param => {
+        const apiParam = {
+            parameterType: 'InputParams',
+            subtype: param.source,
+            parameterName: param.name,
+            type: 'input'
+        };
+        
+        if (param.source === 'Spreadsheet') {
+            apiParam.spreadsheetName = param.spreadsheetName;
+            apiParam.cell = param.cell;
+            apiParam.uom = param.uom;
+        } else if (param.source === 'MaterialStream') {
+            apiParam.streamName = param.streamName;
+            apiParam.parameterType = param.parameterType;
+            
+            if (param.parameterType === 'Property') {
+                apiParam.propertyName = param.propertyName;
+                apiParam.uom = param.uom;
+            } else {
+                apiParam.components = param.components;
+                apiParam.scaleFactor = param.scaleFactor;
+            }
+        } else if (param.source === 'EnergyStream') {
+            apiParam.streamName = param.streamName;
+            apiParam.propertyName = param.propertyName;
+            apiParam.uom = param.uom;
+        }
+        
+        parameters.push(apiParam);
+    });
+    
+    // Add output parameters
+    selectedParameters.outputs.forEach(param => {
+        const apiParam = {
+            parameterType: 'OutputParameters',
+            subtype: param.source,
+            parameterName: param.name,
+            type: 'output'
+        };
+        
+        if (param.source === 'Spreadsheet') {
+            apiParam.spreadsheetName = param.spreadsheetName;
+            apiParam.cell = param.cell;
+            apiParam.uom = param.uom;
+        } else if (param.source === 'MaterialStream') {
+            apiParam.streamName = param.streamName;
+            apiParam.parameterType = param.parameterType;
+            
+            if (param.parameterType === 'Property') {
+                apiParam.propertyName = param.propertyName;
+                apiParam.uom = param.uom;
+            } else {
+                apiParam.components = param.components;
+                apiParam.scaleFactor = param.scaleFactor;
+            }
+        } else if (param.source === 'EnergyStream') {
+            apiParam.streamName = param.streamName;
+            apiParam.propertyName = param.propertyName;
+            apiParam.uom = param.uom;
+        }
+        
+        parameters.push(apiParam);
+    });
+    
+    // Send to the server
+    fetch(`/parameters/api/configure/${caseId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ parameters })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Failed to save parameters');
+        }
+        return response.json();
+    })
+    .then(data => {
+        // Show success message
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-success alert-dismissible fade show mt-3';
+        alert.innerHTML = `
+            <strong>Success!</strong> Parameters saved successfully.
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        document.querySelector('.card-body').prepend(alert);
+        
+        // Re-enable save button
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="bi bi-save"></i> Save Parameter Configuration';
+        
+        // Redirect to case detail page after a delay
+        setTimeout(() => {
+            window.location.href = `/cases/${caseId}`;
+        }, 2000);
+    })
+    .catch(error => {
+        // Show error message
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-danger alert-dismissible fade show mt-3';
+        alert.innerHTML = `
+            <strong>Error!</strong> ${error.message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        document.querySelector('.card-body').prepend(alert);
+        
+        // Re-enable save button
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="bi bi-save"></i> Save Parameter Configuration';
+    });
+}
+
+// Function to load existing parameters
+function loadExistingParameters(params) {
+    // Process input parameters
+    if (params.InputParams) {
+        // Spreadsheet parameters
+        if (params.InputParams.Spreadsheet) {
+            Object.entries(params.InputParams.Spreadsheet).forEach(([name, config]) => {
+                selectedParameters.inputs.push({
+                    id: `${config.SpreadsheetName}_${config.Cell}`,
+                    name: name,
+                    source: 'Spreadsheet',
+                    type: 'input',
+                    spreadsheetName: config.SpreadsheetName,
+                    cell: config.Cell,
+                    uom: config.UOM || ''
+                });
+            });
+        }
+        
+        // Material stream parameters
+        if (params.InputParams.MaterialStream) {
+            Object.entries(params.InputParams.MaterialStream).forEach(([name, config]) => {
+                const param = {
+                    id: `${config.StreamName}_${config.ParameterType || 'Property'}`,
+                    name: name,
+                    source: 'MaterialStream',
+                    type: 'input',
+                    streamName: config.StreamName,
+                    parameterType: config.ParameterType || 'Property'
+                };
+                
+                if (param.parameterType === 'Property') {
+                    param.propertyName = config.PropertyName;
+                    param.uom = config.UOM || '';
+                } else {
+                    param.components = config.GetComponents || [];
+                    param.scaleFactor = config.ScaleFactor || 1.0;
+                }
+                
+                selectedParameters.inputs.push(param);
+            });
+        }
+        
+        // Energy stream parameters
+        if (params.InputParams.EnergyStream) {
+            Object.entries(params.InputParams.EnergyStream).forEach(([name, config]) => {
+                selectedParameters.inputs.push({
+                    id: `${config.StreamName}_${config.PropertyName || 'HeatFlow'}`,
+                    name: name,
+                    source: 'EnergyStream',
+                    type: 'input',
+                    streamName: config.StreamName,
+                    propertyName: config.PropertyName || 'HeatFlow',
+                    uom: config.UOM || ''
+                });
+            });
+        }
+    }
+    
+    // Process output parameters
+    if (params.OutputParameters) {
+        // Spreadsheet parameters
+        if (params.OutputParameters.Spreadsheet) {
+            Object.entries(params.OutputParameters.Spreadsheet).forEach(([name, config]) => {
+                selectedParameters.outputs.push({
+                    id: `${config.SpreadsheetName}_${config.Cell}`,
+                    name: name,
+                    source: 'Spreadsheet',
+                    type: 'output',
+                    spreadsheetName: config.SpreadsheetName,
+                    cell: config.Cell,
+                    uom: config.UOM || ''
+                });
+            });
+        }
+        
+        // Material stream parameters
+        if (params.OutputParameters.MaterialStream) {
+            Object.entries(params.OutputParameters.MaterialStream).forEach(([name, config]) => {
+                const param = {
+                    id: `${config.StreamName}_${config.ParameterType || 'Property'}`,
+                    name: name,
+                    source: 'MaterialStream',
+                    type: 'output',
+                    streamName: config.StreamName,
+                    parameterType: config.ParameterType || 'Property'
+                };
+                
+                if (param.parameterType === 'Property') {
+                    param.propertyName = config.PropertyName;
+                    param.uom = config.UOM || '';
+                } else {
+                    param.components = config.GetComponents || [];
+                    param.scaleFactor = config.ScaleFactor || 1.0;
+                }
+                
+                selectedParameters.outputs.push(param);
+            });
+        }
+        
+        // Energy stream parameters
+        if (params.OutputParameters.EnergyStream) {
+            Object.entries(params.OutputParameters.EnergyStream).forEach(([name, config]) => {
+                selectedParameters.outputs.push({
+                    id: `${config.StreamName}_${config.PropertyName || 'HeatFlow'}`,
+                    name: name,
+                    source: 'EnergyStream',
+                    type: 'output',
+                    streamName: config.StreamName,
+                    propertyName: config.PropertyName || 'HeatFlow',
+                    uom: config.UOM || ''
+                });
+            });
+        }
+    }
+    
+    // Update the display
+    updateSelectedParametersDisplay();
+}
+
+// Start in manual mode by default
+switchToManualMode();
+});
+</script>
+{% endblock %}
+
+

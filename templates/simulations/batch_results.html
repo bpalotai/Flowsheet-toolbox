@@ -1,0 +1,673 @@
+{% extends "base.html" %}
+
+{% block title %}Batch Simulation Results | {{ case.name }} | Simulation Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-grid-3x3-gap text-success me-2"></i>Batch Simulation Results</h1>
+    <!-- If a referrer is provided, use it; otherwise default to the case detail page -->
+    <a href="{{ referrer if referrer else url_for('cases.case_detail', case_id=case.id) }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Back
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Batch Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tbody>
+                        <tr>
+                            <th style="width: 30%">Name:</th>
+                            <td>{{ result.name }}</td>
+                        </tr>
+                        <tr>
+                            <th>Case:</th>
+                            <td>
+                                <a href="{{ url_for('cases.case_detail', case_id=case.id) }}">{{ case.name }}</a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Batch ID:</th>
+                            <td>{{ metadata.get('Batch ID', 'N/A') }}</td>
+                        </tr>
+                        <tr>
+                            <th>Sampling Method:</th>
+                            <td>{{ metadata.get('Sampling Method', 'N/A') }}</td>
+                        </tr>
+                        <tr>
+                            <th>Completion:</th>
+                            <td>
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar bg-success" role="progressbar" 
+                                         style="width: {{ (completed / total * 100) if total > 0 else 0 }}%;" 
+                                         aria-valuenow="{{ completed }}" aria-valuemin="0" aria-valuemax="{{ total }}">
+                                        {{ completed }}/{{ total }}
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Created:</th>
+                            <td>{{ result.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('sampling.download_batch_result', result_id=result.id) }}" class="btn btn-primary">
+                        <i class="bi bi-download me-2"></i> Download Results
+                    </a>
+                    <a href="{{ url_for('sampling.batch_visualize_page', result_id=result.id) }}" class="btn btn-success">
+                        <i class="bi bi-bar-chart-line me-2"></i> Advanced Visualization
+                    </a>
+                    <button type="button" class="btn btn-danger" id="deleteBtn">
+                        <i class="bi bi-trash me-2"></i> Delete Batch
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Results Summary</h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary" id="parameterSelectBtn">
+                        <i class="bi bi-gear-fill me-1"></i> Select Parameters
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" id="resultsTable">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <!-- Parameter headers will be added dynamically -->
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Results data rows will be added dynamically -->
+                            <tr>
+                                <td colspan="100%" class="text-center">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-2">Loading results data...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination will be added here -->
+                <div id="resultsPagination" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add the Static Inputs section here -->
+{% if has_static_inputs and static_inputs %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Static Input Parameters</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped">
+                        <thead>
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Value</th>
+                                <th>Unit</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for param in static_inputs %}
+                            <tr>
+                                <td>{{ param.Parameter }}</td>
+                                <td>{{ param.Value }}</td>
+                                <td>{{ param.Unit }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteModalLabel">Confirm Deletion</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this batch simulation result?</p>
+                <p class="text-danger">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Parameter Selection Modal -->
+<div class="modal fade" id="parameterSelectModal" tabindex="-1" aria-labelledby="parameterSelectModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="parameterSelectModalLabel">Select Parameters to Display</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="paramSearchInput" placeholder="Search parameters...">
+                        <button class="btn btn-outline-secondary" type="button" id="clearSearchBtn">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" id="selectAllParams" checked>
+                        <label class="form-check-label" for="selectAllParams">Select All</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" id="selectInputsOnly">
+                        <label class="form-check-label" for="selectInputsOnly">Inputs Only</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" id="selectOutputsOnly">
+                        <label class="form-check-label" for="selectOutputsOnly">Outputs Only</label>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">Input Parameters</h6>
+                            </div>
+                            <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                                <div id="inputParamsList">
+                                    <!-- Input parameters will be added here -->
+                                    <div class="text-center">
+                                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                        <span class="ms-2">Loading parameters...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">Output Parameters</h6>
+                            </div>
+                            <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                                <div id="outputParamsList">
+                                    <!-- Output parameters will be added here -->
+                                    <div class="text-center">
+                                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                        <span class="ms-2">Loading parameters...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="applyParamSelectBtn">Apply</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.plot.ly/plotly-2.14.0.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const resultId = {{ result.id }};
+    
+    // Delete button
+    const deleteBtn = document.getElementById('deleteBtn');
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+    
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', function() {
+            deleteModal.show();
+        });
+    }
+    
+    if (confirmDeleteBtn) {
+        confirmDeleteBtn.addEventListener('click', function() {
+            // Send delete request
+            fetch(`/api/simulations/result/${resultId}`, {
+                method: 'DELETE'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to delete batch result');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Redirect to case page
+                window.location.href = '/cases/{{ case.id }}';
+            })
+            .catch(error => {
+                console.error('Error deleting batch result:', error);
+                alert(`Error: ${error.message}`);
+                deleteModal.hide();
+            });
+        });
+    }
+    
+    // Parameter selection modal
+    const parameterSelectBtn = document.getElementById('parameterSelectBtn');
+    const parameterSelectModal = new bootstrap.Modal(document.getElementById('parameterSelectModal'));
+    const applyParamSelectBtn = document.getElementById('applyParamSelectBtn');
+    const selectAllParams = document.getElementById('selectAllParams');
+    const selectInputsOnly = document.getElementById('selectInputsOnly');
+    const selectOutputsOnly = document.getElementById('selectOutputsOnly');
+    const paramSearchInput = document.getElementById('paramSearchInput');
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    
+    // State variables
+    let batchResults = null;
+    let allParameters = [];
+    let inputParameters = [];
+    let outputParameters = [];
+    let selectedParameters = [];
+    let currentPage = 1;
+    const pageSize = 20; // Number of rows per page
+    
+    // Fetch batch results data
+    fetchBatchResults();
+    
+    // Event listeners for parameter selection
+    if (parameterSelectBtn) {
+        parameterSelectBtn.addEventListener('click', function() {
+            populateParameterLists();
+            parameterSelectModal.show();
+        });
+    }
+    
+    if (applyParamSelectBtn) {
+        applyParamSelectBtn.addEventListener('click', function() {
+            // Get selected parameters
+            selectedParameters = [];
+            
+            document.querySelectorAll('.param-checkbox:checked').forEach(checkbox => {
+                selectedParameters.push(checkbox.value);
+            });
+            
+            // Update the table with selected parameters
+            renderResultsTable(batchResults, selectedParameters);
+            
+            // Close the modal
+            parameterSelectModal.hide();
+        });
+    }
+    
+    if (selectAllParams) {
+        selectAllParams.addEventListener('change', function() {
+            document.querySelectorAll('.param-checkbox').forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            
+            // Uncheck other filter options
+            if (this.checked) {
+                selectInputsOnly.checked = false;
+                selectOutputsOnly.checked = false;
+            }
+        });
+    }
+    
+    if (selectInputsOnly) {
+        selectInputsOnly.addEventListener('change', function() {
+            if (this.checked) {
+                // Uncheck other filter options
+                selectAllParams.checked = false;
+                selectOutputsOnly.checked = false;
+                
+                // Check only input parameters
+                document.querySelectorAll('.param-checkbox').forEach(checkbox => {
+                    checkbox.checked = inputParameters.includes(checkbox.value);
+                });
+            }
+        });
+    }
+    
+    if (selectOutputsOnly) {
+        selectOutputsOnly.addEventListener('change', function() {
+            if (this.checked) {
+                // Uncheck other filter options
+                selectAllParams.checked = false;
+                selectInputsOnly.checked = false;
+                
+                // Check only output parameters
+                document.querySelectorAll('.param-checkbox').forEach(checkbox => {
+                    checkbox.checked = outputParameters.includes(checkbox.value);
+                });
+            }
+        });
+    }
+    
+    if (paramSearchInput) {
+        paramSearchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            
+            document.querySelectorAll('.param-item').forEach(item => {
+                const paramName = item.querySelector('label').textContent.toLowerCase();
+                if (paramName.includes(searchTerm)) {
+                    item.style.display = '';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+    }
+    
+    if (clearSearchBtn) {
+        clearSearchBtn.addEventListener('click', function() {
+            paramSearchInput.value = '';
+            document.querySelectorAll('.param-item').forEach(item => {
+                item.style.display = '';
+            });
+        });
+    }
+    
+    // Function to fetch batch results
+    function fetchBatchResults() {
+        // Use the correct endpoint to fetch batch results
+        fetch(`/simulations/api/batch/${resultId}/data`)
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.error || 'Failed to fetch batch results');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                batchResults = data;
+                
+                // Extract parameter names
+                if (data.results && data.results.length > 0) {
+                    allParameters = Object.keys(data.results[0]);
+                    
+                    // Separate input and output parameters
+                    if (data.metadata && data.metadata.input_params) {
+                        inputParameters = data.metadata.input_params;
+                    } else {
+                        // If not specified, assume parameters starting with "Input" are inputs
+                        inputParameters = allParameters.filter(param => param.startsWith('Input'));
+                    }
+                    
+                    if (data.metadata && data.metadata.output_params) {
+                        outputParameters = data.metadata.output_params;
+                    } else {
+                        // If not specified, assume parameters starting with "Output" are outputs
+                        outputParameters = allParameters.filter(param => param.startsWith('Output'));
+                    }
+                    
+                    // By default, select all parameters
+                    selectedParameters = [...allParameters];
+                }
+                
+                // Render the results table
+                renderResultsTable(data, selectedParameters);
+            })
+            .catch(error => {
+                console.error('Error fetching batch results:', error);
+                document.querySelector('#resultsTable tbody').innerHTML = `
+                    <tr>
+                        <td colspan="100%" class="text-center text-danger">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            Error loading results: ${error.message}
+                        </td>
+                    </tr>
+                `;
+            });
+    }
+
+    // Function to populate parameter lists in the selection modal
+    function populateParameterLists() {
+        const inputParamsList = document.getElementById('inputParamsList');
+        const outputParamsList = document.getElementById('outputParamsList');
+        
+        // Clear existing lists
+        inputParamsList.innerHTML = '';
+        outputParamsList.innerHTML = '';
+        
+        // Add input parameters
+        inputParameters.forEach(param => {
+            const isChecked = selectedParameters.includes(param);
+            
+            const paramItem = document.createElement('div');
+            paramItem.className = 'form-check param-item';
+            paramItem.innerHTML = `
+                <input class="form-check-input param-checkbox" type="checkbox" value="${param}" id="param_${param.replace(/\s+/g, '_')}" ${isChecked ? 'checked' : ''}>
+                <label class="form-check-label" for="param_${param.replace(/\s+/g, '_')}">
+                    ${param}
+                </label>
+            `;
+            
+            inputParamsList.appendChild(paramItem);
+        });
+        
+        // Add output parameters
+        outputParameters.forEach(param => {
+            const isChecked = selectedParameters.includes(param);
+            
+            const paramItem = document.createElement('div');
+            paramItem.className = 'form-check param-item';
+            paramItem.innerHTML = `
+                <input class="form-check-input param-checkbox" type="checkbox" value="${param}" id="param_${param.replace(/\s+/g, '_')}" ${isChecked ? 'checked' : ''}>
+                <label class="form-check-label" for="param_${param.replace(/\s+/g, '_')}">
+                    ${param}
+                </label>
+            `;
+            
+            outputParamsList.appendChild(paramItem);
+        });
+        
+        // If no input parameters
+        if (inputParameters.length === 0) {
+            inputParamsList.innerHTML = '<div class="text-muted">No input parameters available</div>';
+        }
+        
+        // If no output parameters
+        if (outputParameters.length === 0) {
+            outputParamsList.innerHTML = '<div class="text-muted">No output parameters available</div>';
+        }
+    }
+    
+    // Function to render the results table with pagination
+    function renderResultsTable(data, selectedParams) {
+        if (!data || !data.results || data.results.length === 0) {
+            document.querySelector('#resultsTable tbody').innerHTML = `
+                <tr>
+                    <td colspan="100%" class="text-center">
+                        <div class="alert alert-info mb-0">
+                            <i class="bi bi-info-circle me-2"></i>
+                            No results available.
+                        </div>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        const results = data.results;
+        const totalPages = Math.ceil(results.length / pageSize);
+        
+        // Create table header
+        const thead = document.querySelector('#resultsTable thead tr');
+        thead.innerHTML = '<th>#</th>';
+        
+        selectedParams.forEach(param => {
+            thead.innerHTML += `<th>${param}</th>`;
+        });
+        
+        // Render the current page
+        renderPage(currentPage);
+        
+        // Update pagination controls
+        updatePaginationControls(currentPage, totalPages);
+        
+        // Function to render a specific page
+        function renderPage(page) {
+            const tbody = document.querySelector('#resultsTable tbody');
+            tbody.innerHTML = '';
+            
+            const startIdx = (page - 1) * pageSize;
+            const endIdx = Math.min(startIdx + pageSize, results.length);
+            
+            for (let i = startIdx; i < endIdx; i++) {
+                const result = results[i];
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>${i + 1}</td>`;
+                
+                selectedParams.forEach(param => {
+                    const value = result[param];
+                    row.innerHTML += `<td>${typeof value === 'number' ? value.toFixed(4) : value}</td>`;
+                });
+                
+                tbody.appendChild(row);
+            }
+        }
+        
+        // Function to update pagination controls
+        function updatePaginationControls(page, totalPages) {
+            const paginationContainer = document.getElementById('resultsPagination');
+            if (!paginationContainer) return;
+            
+            let paginationHtml = `
+                <nav aria-label="Results pagination">
+                    <ul class="pagination justify-content-center">
+                        <li class="page-item ${page === 1 ? 'disabled' : ''}">
+                            <a class="page-link" href="#" data-page="${page - 1}" aria-label="Previous">
+                                <span aria-hidden="true">&laquo;</span>
+                            </a>
+                        </li>
+            `;
+            
+            // Show limited number of page links
+            const maxVisiblePages = 5;
+            let startPage = Math.max(1, page - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+            
+            if (endPage - startPage + 1 < maxVisiblePages) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+            
+            if (startPage > 1) {
+                paginationHtml += `
+                    <li class="page-item">
+                        <a class="page-link" href="#" data-page="1">1</a>
+                    </li>
+                `;
+                if (startPage > 2) {
+                    paginationHtml += `
+                        <li class="page-item disabled">
+                            <a class="page-link" href="#">...</a>
+                        </li>
+                    `;
+                }
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                paginationHtml += `
+                    <li class="page-item ${i === page ? 'active' : ''}">
+                        <a class="page-link" href="#" data-page="${i}">${i}</a>
+                    </li>
+                `;
+            }
+            
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    paginationHtml += `
+                        <li class="page-item disabled">
+                            <a class="page-link" href="#">...</a>
+                        </li>
+                    `;
+                }
+                paginationHtml += `
+                    <li class="page-item">
+                        <a class="page-link" href="#" data-page="${totalPages}">${totalPages}</a>
+                    </li>
+                `;
+            }
+            
+            paginationHtml += `
+                        <li class="page-item ${page === totalPages ? 'disabled' : ''}">
+                            <a class="page-link" href="#" data-page="${page + 1}" aria-label="Next">
+                                <span aria-hidden="true">&raquo;</span>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+                <div class="text-center text-muted">
+                    Showing ${(page - 1) * pageSize + 1} to ${Math.min(page * pageSize, results.length)} of ${results.length} results
+                </div>
+            `;
+            
+            paginationContainer.innerHTML = paginationHtml;
+            
+            // Add event listeners to pagination links
+            paginationContainer.querySelectorAll('.page-link').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const pageNum = parseInt(this.getAttribute('data-page'));
+                    if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                        currentPage = pageNum;
+                        renderPage(currentPage);
+                        updatePaginationControls(currentPage, totalPages);
+                    }
+                });
+            });
+        }
+    }
+});
+</script>
+{% endblock %}
+
