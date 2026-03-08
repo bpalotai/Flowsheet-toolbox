@@ -1,123 +1,112 @@
-# Hysys-Simulation
+# Flowsheet Toolbox
 
-**A web-based interface for Aspen HYSYS simulation management, surrogate modeling, and analysis.**
+Web platform for Aspen HYSYS-based digital-twin workflows: simulation execution, surrogate modeling, calibration, and analysis.
 
-## 🔍 Overview
+## Purpose
 
-**Hysys-Simulation** provides process engineers with a powerful platform to:
+Flowsheet Toolbox is designed to connect rigorous process simulation with data-driven model maintenance in one practical engineering workflow.
 
-- Manage and execute Aspen HYSYS simulations  
-- Build and train surrogate (ML-based) models  
-- Calibrate simulation parameters against real-world data  
-- Conduct advanced analysis (sensitivity, Monte Carlo, contribution)  
-- Visualize and compare simulation results through an intuitive web interface
+The main goal is to help users:
 
-This tool bridges the gap between complex process simulations and data-driven engineering insights.
+- run and manage HYSYS cases in a structured way,
+- build surrogate models from simulation data,
+- calibrate model parameters against plant or reference datasets,
+- maintain surrogate accuracy over time with online learning,
+- analyze, compare, and export results for engineering decisions.
 
----
+In short, the platform reduces manual effort in model upkeep and supports faster, repeatable digital-twin operation.
 
-## ✨ Features
+## Main Parts of the Tool
 
-- **Simulation Management**: Run and manage HYSYS simulations through a user-friendly UI  
-- **Case Management**: Create, configure, and store simulation cases  
-- **Surrogate Modeling**: Build machine learning models to approximate simulation outputs  
-- **Calibration**: Tune HYSYS parameters automatically to match experimental data  
-- **Advanced Analysis**:
-  - Sensitivity analysis (parameter impact)
-  - Monte Carlo simulations (uncertainty quantification)
-  - Contribution analysis (parameter importance)
-  - Comparative analysis (multiple simulations)
-- **Visualization**: Interactive plots and tables for simulations and analyses
+1. Case Management
+- Create and organize simulation cases.
+- Configure input and output parameter mappings.
+- Keep model metadata and files in one place.
 
----
+2. Simulation
+- Execute HYSYS simulations from the web UI.
+- Store and review run results.
+- Use batch simulation flows for larger datasets.
 
-## ⚙️ Installation
+3. Surrogate Modeling
+- Train machine learning surrogates from simulation data.
+- Save/load trained models and scalers.
+- Use surrogates for faster prediction-based workflows.
+
+4. Calibration
+- Single calibration and batch calibration workflows.
+- Online learning calibration workflow for sequential datasets.
+- Support for optimizer settings (currently PSO-based flow).
+
+5. Analysis and Visualization
+- Compare runs and inspect parameter-level behavior.
+- Visualize row-wise calibration quality and metrics.
+- Export results to Excel for reporting and post-processing.
+
+## Future Opportunities
+
+The platform can be extended with:
+
+- Optimization cases for automated operating-point and decision-variable search.
+- Explainability methods to improve model transparency and support engineering trust (for example feature-importance and local explanation workflows).
+
+## Typical Workflow
+
+1. Create a case and configure parameter mappings.
+2. Run simulations or generate batch data.
+3. Train a surrogate model.
+4. Run calibration (single, batch, or online learning).
+5. Review metrics/charts and export results.
+
+## Installation
 
 ### Prerequisites
 
-- Windows OS (required for HYSYS integration)
-- Aspen HYSYS (version 10.0 or later)
+- Windows OS (required for HYSYS COM integration)
+- Aspen HYSYS 10.0+
 - Python 3.8+
 
-### Steps
+### Setup
 
-1. Clone this repository or download as ZIP:
-   ```bash
-   git clone https://github.com/bpalotai/Hysys-Simulation.git
+1. Clone the repository:
+```bash
+git clone https://github.com/bpalotai/Hysys-Simulation.git
+```
 
-   ```
+2. Install dependencies:
+```bash
+install/install.bat
+```
 
-2. Install the required Python packages:
-   ```bash
-    install/install.bat
-    ```
+3. Start the application:
+```bash
+Start.bat
+```
 
-3. Run the application:
-   ```bash
-   Start.bat
+4. Open:
+```text
+http://localhost:5000
+```
 
-   ```
-4. Open your browser and go to:
-   ```bash
-   http://localhost:5000
+## Notes
 
-   ```
+- This software is intended for research and engineering use.
+- It is not affiliated with or endorsed by Aspen Technology, Inc.
 
-## 🧪 Usage Guide
+## How to Cite
 
-### ➕ Creating a New Case
+If you use this toolbox in academic work, please cite:
 
-1. Go to **Cases**
-2. Click **Create New Case**
-3. Name and describe your case
-4. Upload or specify your `.hsc` HYSYS file
-5. Configure inputs/outputs via the settings interface
+```bibtex
+@article{palotai2025online,
+  title={Online learning supported surrogate-based flowsheet model maintenance},
+  author={Palotai, Bal{\'a}zs and Kis, G{\'a}bor and Chov{\'a}n, Tibor and B{\'a}rk{\'a}nyi, {\'A}gnes},
+  journal={Digital Chemical Engineering},
+  pages={100287},
+  year={2025},
+  publisher={Elsevier},
+  doi={10.1016/j.dche.2025.100287}
+}
+```
 
----
-
-### ▶️ Running a Simulation
-
-1. Select a case
-2. Go to **Run Simulation**
-3. Set parameters and click **Run**
-4. View results on the **Results** page
-
----
-
-### 🧠 Creating a Surrogate Model
-
-1. Select a case
-2. Navigate to **Surrogate Models**
-3. Click **Create New Model**
-4. Choose input/output variables and model type
-5. Click **Train Model**
-
----
-
-### 📊 Performing Analysis
-
-1. Go to **Simulation Analysis**
-2. Select a case and result set
-3. Choose an analysis type:
-   - **Sensitivity Analysis**
-   - **Monte Carlo Simulation**
-   - **Contribution Analysis**
-4. Configure and run the analysis
-5. View/export results
-
----
-
-### 🛠️ Calibration
-
-1. Go to **Calibration**
-2. Select a case
-3. Upload reference data or enter manually
-4. Configure calibration settings
-5. Run and evaluate results
-
-## 🙏 Acknowledgments
-
-- **Aspen Technology, Inc.** for Aspen HYSYS  
-- Open-source contributors and Python ML/data libraries  
-
-> ⚠️ *This project is not affiliated with or endorsed by Aspen Technology, Inc.*
+DOI: https://doi.org/10.1016/j.dche.2025.100287
