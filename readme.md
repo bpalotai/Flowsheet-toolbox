@@ -90,6 +90,8 @@ http://localhost:5000
 
 ## Notes
 
+- This tool was created from methods developed during PhD research, and the core system is continuously updated as those methods evolve and new results are produced.
+- Because of this ongoing integration, some modules may temporarily be less tightly connected, and occasional bugs can occur.
 - This software is intended for research and engineering use.
 - It is not affiliated with or endorsed by Aspen Technology, Inc.
 
