@@ -10,30 +10,92 @@ from flask import Blueprint, render_template, request, jsonify, current_app, fla
 from werkzeug.utils import secure_filename
 import tempfile
 import pythoncom
+import uuid
+from threading import Thread, Lock
+import warnings
 
 from api.database import db, Case, SimulationResult, Surrogate
 from driver.Calibration.calibration_driver import CalibrationDriver
 from driver.Simulation.simulation_driver import SimulationDriver
 from driver.Surrogate.surrogate_driver import SurrogateDriver
+from driver.Workflow.drivers.CalibrationWorkflow_driver import CalibrationWorkflow
 
 # Create blueprint
 calibration_bp = Blueprint('calibration', __name__, url_prefix='/calibration')
+ONLINE_CALIBRATION_JOBS = {}
+ONLINE_CALIBRATION_LOCK = Lock()
+warnings.filterwarnings(
+    "ignore",
+    message="X does not have valid feature names, but StandardScaler was fitted with feature names",
+    category=UserWarning
+)
 
 # Convert numpy values to regular Python floats for JSON serialization
 def convert_numpy_to_python(obj):
     """Recursively convert numpy types to Python native types"""
     if isinstance(obj, np.ndarray):
         return obj.tolist()
+    elif isinstance(obj, np.generic):
+        return obj.item()
     elif isinstance(obj, (np.float64, np.float32)):
         return float(obj)
     elif isinstance(obj, (np.int64, np.int32)):
         return int(obj)
+    elif isinstance(obj, (np.bool_,)):
+        return bool(obj)
     elif isinstance(obj, list):
         return [convert_numpy_to_python(item) for item in obj]
     elif isinstance(obj, dict):
         return {key: convert_numpy_to_python(value) for key, value in obj.items()}
     else:
         return obj
+
+
+def make_json_safe(obj):
+    """
+    Ensure object contains only JSON-serializable primitives and finite numbers.
+    Converts NaN/Inf to None to avoid JSON encoding failures.
+    """
+    value = convert_numpy_to_python(obj)
+    if isinstance(value, float):
+        return value if np.isfinite(value) else None
+    if isinstance(value, list):
+        return [make_json_safe(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): make_json_safe(val) for key, val in value.items()}
+    return value
+
+
+def resolve_simulation_file_path(case):
+    """Resolve simulation file path with existing fallback logic."""
+    sim_file_path = case.simulation_file
+    if os.path.exists(sim_file_path):
+        return sim_file_path
+
+    alt_paths = [
+        os.path.join('Cases', case.name, 'HysysModel', os.path.basename(case.simulation_file)),
+        os.path.join('Cases', case.name, os.path.basename(case.simulation_file))
+    ]
+    for path in alt_paths:
+        if os.path.exists(path):
+            return path
+    return None
+
+
+def extract_flat_output_values(simulation_result):
+    """Extract flat numeric output dict from simulation result payload."""
+    if not isinstance(simulation_result, dict):
+        return {}
+    if 'outputs' not in simulation_result:
+        return simulation_result
+
+    flat = {}
+    for key, value_dict in simulation_result.get('outputs', {}).items():
+        if isinstance(value_dict, dict) and 'value' in value_dict:
+            flat[key] = value_dict['value']
+        else:
+            flat[key] = value_dict
+    return flat
 
 @calibration_bp.route('/', methods=['GET'])
 def index():
@@ -45,17 +107,27 @@ def index():
         calibrations = SimulationResult.query.filter(
             db.or_(
                 SimulationResult.simulation_type.like('Calibration%'),
-                SimulationResult.simulation_type.like('Batch Calibration%')
+                SimulationResult.simulation_type.like('Batch Calibration%'),
+                SimulationResult.simulation_type.like('Online Calibration%')
             )
         ).order_by(SimulationResult.timestamp.desc()).all()
         
         # Parse the data for each calibration
         calibration_data = []
         for calibration in calibrations:
-            data = json.loads(calibration.data) if calibration.data else {}
+            data = calibration.data if calibration.data else {}
+            if isinstance(data, str):
+                try:
+                    data = json.loads(data)
+                except Exception:
+                    data = {}
             error_value = None
             if data and 'overall_metrics' in data and 'sim_mean_rel_error' in data['overall_metrics']:
                 error_value = data['overall_metrics']['sim_mean_rel_error']
+            elif data and 'summary' in data and 'mean_sim_rel_error' in data['summary']:
+                error_value = data['summary']['mean_sim_rel_error']
+            elif data and 'batch_metrics' in data and 'batch_sim_mean_rel_error' in data['batch_metrics']:
+                error_value = data['batch_metrics']['batch_sim_mean_rel_error']
             
             calibration_data.append({
                 'calibration': calibration,
@@ -174,13 +246,17 @@ def get_surrogate_models(case_id):
             else:
                 # Try to parse model_config_json directly if model_config property doesn't exist
                 model_config = json.loads(model.model_config_json) if model.model_config_json else {}
+            training_info = _get_surrogate_training_data_info(model)
                     
             models.append({
                 "id": model.id,
                 "name": model.name,
                 "is_inverse": model.is_inverse_model if hasattr(model, 'is_inverse_model') else False,
                 "active_inputs": model_config.get('input_params', []),
-                "active_outputs": model_config.get('output_params', [])
+                "active_outputs": model_config.get('output_params', []),
+                "training_dataset_name": training_info.get('dataset_name'),
+                "training_dataset_size": training_info.get('dataset_rows'),
+                "has_training_dataset": training_info.get('dataset_exists', False),
             })
         
         return jsonify({"models": models})
@@ -696,9 +772,10 @@ def save_results():
                     
                 summary.to_excel(writer, sheet_name='Summary')
             
-            # Update result with file path
-            result.file_path = result_path
-            db.session.commit()
+            # Update result with file path when schema supports it.
+            if hasattr(result, 'file_path'):
+                result.file_path = result_path
+                db.session.commit()
             
         except Exception as e:
             current_app.logger.error(f"Error creating Excel file: {str(e)}")
@@ -719,24 +796,100 @@ def download_result(result_id):
     """
     try:
         result = SimulationResult.query.get_or_404(result_id)
-        
-        if not result.file_path or not os.path.exists(result.file_path):
-            # Try to find the file in the default location
-            results_folder = os.path.join('Cases', result.case.name, "CalibrationResults")
-            timestamp = result.timestamp.strftime("%Y%m%d-%H%M%S")
-            result_path = os.path.join(results_folder, f"calibration_results_{timestamp}.xlsx")
-            
-            if not os.path.exists(result_path):
-                return jsonify({"error": "Result file not found"}), 404
-            
-            result.file_path = result_path
-            db.session.commit()
-        
-        return send_file(
-            result.file_path,
-            as_attachment=True,
-            download_name=f"calibration_results_{result.timestamp.strftime('%Y%m%d-%H%M%S')}.xlsx"
-        )
+
+        stored_file_path = getattr(result, 'file_path', None)
+        if stored_file_path and os.path.exists(stored_file_path):
+            return send_file(
+                stored_file_path,
+                as_attachment=True,
+                download_name=f"calibration_results_{result.timestamp.strftime('%Y%m%d-%H%M%S')}.xlsx"
+            )
+
+        # Try historical default location for legacy saved calibration files.
+        results_folder = os.path.join('Cases', result.case.name, "CalibrationResults")
+        timestamp = result.timestamp.strftime("%Y%m%d-%H%M%S")
+        result_path = os.path.join(results_folder, f"calibration_results_{timestamp}.xlsx")
+        if os.path.exists(result_path):
+            if hasattr(result, 'file_path'):
+                result.file_path = result_path
+                db.session.commit()
+            return send_file(
+                result_path,
+                as_attachment=True,
+                download_name=f"calibration_results_{result.timestamp.strftime('%Y%m%d-%H%M%S')}.xlsx"
+            )
+
+        # Build export on-the-fly for online calibration payloads that are stored only in DB.
+        data = result.data if result.data else {}
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except Exception:
+                data = {}
+
+        row_details = data.get('row_details', []) if isinstance(data, dict) else []
+        summary = data.get('summary', {}) if isinstance(data, dict) else {}
+        configuration = data.get('configuration', {}) if isinstance(data, dict) else {}
+
+        if row_details or summary:
+            def _flatten_dict(input_dict, parent_key=''):
+                flat = {}
+                for key, value in (input_dict or {}).items():
+                    full_key = f"{parent_key}.{key}" if parent_key else str(key)
+                    if isinstance(value, dict):
+                        flat.update(_flatten_dict(value, full_key))
+                    else:
+                        flat[full_key] = value
+                return flat
+
+            with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
+                temp_path = tmp.name
+
+            with pd.ExcelWriter(temp_path, engine='xlsxwriter') as writer:
+                if summary:
+                    pd.DataFrame([convert_numpy_to_python(summary)]).to_excel(
+                        writer, sheet_name='Summary', index=False
+                    )
+
+                if configuration:
+                    cfg_flat = _flatten_dict(convert_numpy_to_python(configuration))
+                    pd.DataFrame([cfg_flat]).to_excel(
+                        writer, sheet_name='Configuration', index=False
+                    )
+
+                if row_details:
+                    flat_rows = [_flatten_dict(convert_numpy_to_python(row)) for row in row_details]
+                    pd.DataFrame(flat_rows).to_excel(writer, sheet_name='Row_Details', index=False)
+
+                    metric_rows = []
+                    for row in row_details:
+                        row_idx = row.get('row_index')
+                        metrics = row.get('metrics') or {}
+                        for param, vals in metrics.items():
+                            metric_rows.append({
+                                'row_index': row_idx,
+                                'parameter': param,
+                                'true_value': vals.get('true_value'),
+                                'simulation_value': vals.get('simulation_value'),
+                                'surrogate_value': vals.get('surrogate_value'),
+                                'sim_absolute_error': vals.get('sim_absolute_error'),
+                                'sim_relative_error': vals.get('sim_relative_error'),
+                                'surr_absolute_error': vals.get('surr_absolute_error'),
+                                'surr_relative_error': vals.get('surr_relative_error'),
+                            })
+                    if metric_rows:
+                        pd.DataFrame(convert_numpy_to_python(metric_rows)).to_excel(
+                            writer, sheet_name='Metrics', index=False
+                        )
+
+            return send_file(
+                temp_path,
+                as_attachment=True,
+                download_name=f"online_calibration_results_{result.timestamp.strftime('%Y%m%d-%H%M%S')}.xlsx",
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+
+        return jsonify({"error": "Result file not found"}), 404
     
     except Exception as e:
         current_app.logger.error(f"Error in download_result: {str(e)}")
@@ -751,8 +904,9 @@ def delete_result(result_id):
         result = SimulationResult.query.get_or_404(result_id)
         
         # Delete file if it exists
-        if result.file_path and os.path.exists(result.file_path):
-            os.remove(result.file_path)
+        result_file_path = getattr(result, 'file_path', None)
+        if result_file_path and os.path.exists(result_file_path):
+            os.remove(result_file_path)
         
         # Delete from database
         db.session.delete(result)
@@ -853,6 +1007,462 @@ def batch_calibration():
         flash(f"An error occurred: {str(e)}", "danger")
         return redirect(url_for('calibration.index'))
 
+
+@calibration_bp.route('/online', methods=['GET'])
+def online_calibration():
+    """
+    Render the online learning calibration page.
+    """
+    try:
+        cases = Case.query.all()
+        return render_template('calibration/online_calibration.html', cases=cases)
+    except Exception as e:
+        current_app.logger.error(f"Error in online_calibration: {str(e)}")
+        flash(f"An error occurred: {str(e)}", "danger")
+        return redirect(url_for('calibration.index'))
+
+
+def _resolve_surrogate_model_directory(surrogate):
+    candidates = [
+        os.path.join(surrogate.model_path, 'base'),
+        surrogate.model_path,
+    ]
+    if surrogate.model_path.lower().endswith('.joblib'):
+        candidates.insert(0, os.path.dirname(surrogate.model_path))
+
+    for model_dir in candidates:
+        model_file = os.path.join(model_dir, 'model.joblib')
+        scaler_file = os.path.join(model_dir, 'scaler.joblib')
+        if os.path.exists(model_file) and os.path.exists(scaler_file):
+            return model_dir
+    return None
+
+
+def _get_surrogate_training_data_info(surrogate):
+    """Return surrogate training dataset metadata and file path if available."""
+    model_config = surrogate.model_config if hasattr(surrogate, 'model_config') else {}
+    training_data_name = model_config.get('training_data_name') if isinstance(model_config, dict) else None
+    if not training_data_name:
+        training_data_name = 'training_data.csv'
+
+    training_data_path = os.path.join(surrogate.model_path, 'training_data.csv')
+    total_rows = None
+    if os.path.exists(training_data_path):
+        try:
+            # Fast row count for CSV.
+            with open(training_data_path, 'r', encoding='utf-8', errors='ignore') as f:
+                total_rows = max(sum(1 for _ in f) - 1, 0)
+        except Exception:
+            total_rows = None
+
+    return {
+        'dataset_name': training_data_name,
+        'dataset_rows': total_rows,
+        'dataset_path': training_data_path,
+        'dataset_exists': os.path.exists(training_data_path),
+    }
+
+
+def _set_online_job_state(job_id, **kwargs):
+    safe_kwargs = make_json_safe(kwargs)
+    with ONLINE_CALIBRATION_LOCK:
+        if job_id not in ONLINE_CALIBRATION_JOBS:
+            ONLINE_CALIBRATION_JOBS[job_id] = {}
+        ONLINE_CALIBRATION_JOBS[job_id].update(safe_kwargs)
+
+
+def _execute_online_calibration(payload, progress_callback=None):
+    workflow = None
+    try:
+        case_id = payload.get('case_id')
+        case = Case.query.get_or_404(case_id)
+        case_parameters = case.parameters if case.parameters else {}
+
+        use_surrogate = payload.get('use_surrogate', True)
+        surrogate_id = payload.get('surrogate_id')
+        if not use_surrogate or not surrogate_id:
+            raise ValueError("Online learning calibration requires a surrogate model.")
+
+        excel_data = payload.get('excel_data', {})
+        full_data = excel_data.get('full_data', [])
+        if not full_data:
+            raise ValueError("No workflow dataset provided.")
+
+        calibrate_params = payload.get('calibrate_params', {})
+        if not calibrate_params:
+            raise ValueError("At least one calibration parameter range is required.")
+
+        output_params = payload.get('output_params', {})
+        if not output_params:
+            raise ValueError("At least one target output parameter is required.")
+
+        surrogate = Surrogate.query.get_or_404(surrogate_id)
+        process_df = pd.DataFrame(full_data)
+
+        surrogate_input_params = list(surrogate.input_params or [])
+        surrogate_output_params = list(surrogate.output_params or [])
+        if not surrogate_input_params or not surrogate_output_params:
+            raise ValueError("Selected surrogate model has no input/output parameter definition.")
+
+        surrogate_inputs = set(surrogate.input_params or [])
+        surrogate_outputs = set(surrogate.output_params or [])
+        invalid_inputs = [p for p in calibrate_params.keys() if surrogate_inputs and p not in surrogate_inputs]
+        invalid_outputs = [p for p in output_params.keys() if surrogate_outputs and p not in surrogate_outputs]
+        if invalid_inputs:
+            raise ValueError(f"Selected calibration parameters are not supported by surrogate: {invalid_inputs}")
+        if invalid_outputs:
+            raise ValueError(f"Selected target outputs are not supported by surrogate: {invalid_outputs}")
+
+        required_columns = list(dict.fromkeys(surrogate_input_params + surrogate_output_params))
+        missing_columns = [col for col in required_columns if col not in process_df.columns]
+        if missing_columns:
+            raise ValueError(f"Workflow data is missing required columns for surrogate/simulation model: {missing_columns}")
+
+        process_df = process_df[required_columns].apply(pd.to_numeric, errors='coerce').dropna()
+        if process_df.empty:
+            raise ValueError("No valid numeric rows found in workflow data.")
+
+        training_info = _get_surrogate_training_data_info(surrogate)
+        if not training_info.get('dataset_exists'):
+            raise ValueError("Selected surrogate has no stored training dataset (training_data.csv).")
+        training_df = pd.read_csv(training_info['dataset_path'])
+        missing_training = [col for col in required_columns if col not in training_df.columns]
+        if missing_training:
+            raise ValueError(f"Surrogate training data is missing required columns: {missing_training}")
+        training_df = training_df[required_columns].apply(pd.to_numeric, errors='coerce').dropna()
+        if training_df.empty:
+            raise ValueError("No valid numeric rows found in surrogate training data.")
+
+        surrogate_model_dir = _resolve_surrogate_model_directory(surrogate)
+        if not surrogate_model_dir:
+            raise ValueError("Surrogate model files not found (model.joblib/scaler.joblib).")
+
+        sim_file_path = resolve_simulation_file_path(case)
+        if not sim_file_path:
+            raise ValueError("Simulation file not found for selected case.")
+
+        fitparamlimit = {
+            param: {
+                'min': float(cfg.get('min', 0.0)),
+                'max': float(cfg.get('max', 1.0)),
+            }
+            for param, cfg in calibrate_params.items()
+        }
+
+        weights = payload.get('weights', {})
+        sdevs = payload.get('sdevs', {})
+        y_fitt = {
+            param: {
+                'Weight': float(weights.get(param, output_params.get(param, {}).get('weight', 1.0))),
+                'SDEV': float(sdevs.get(param, output_params.get(param, {}).get('sdev', 0.1))),
+            }
+            for param in output_params.keys()
+        }
+
+        pso_params = payload.get('pso_params', {})
+        workflow_settings = payload.get('workflow_settings', {})
+        online_learning_settings = payload.get('online_learning_settings', {})
+
+        merged_workflow_settings = {
+            'calibration_type': 'online',
+            'run_direct_for_not_accurate': bool(workflow_settings.get('run_direct_for_not_accurate', True)),
+            'sim_validation_treshold': float(workflow_settings.get('sim_validation_treshold', 0.1)),
+            'base_calibration_error_factor': float(workflow_settings.get('base_calibration_error_factor', 0.1)),
+            'point_selection_type': workflow_settings.get('point_selection_type', 'conditional'),
+            'logging_level': workflow_settings.get('logging_level', 'INFO'),
+            'use_flowsheet_model': bool(workflow_settings.get('use_flowsheet_model', True)),
+            'mimic_flowsheet_calibration': bool(workflow_settings.get('mimic_flowsheet_calibration', False)),
+            'workflow_random_seed': workflow_settings.get('workflow_random_seed', 42),
+            'stop_workingpoint': workflow_settings.get('stop_workingpoint'),
+            'debug_workflow': bool(workflow_settings.get('debug_workflow', False)),
+            'direct_calibration_data_path': workflow_settings.get('direct_calibration_data_path'),
+        }
+
+        calibration_settings = {
+            'y_fitt': y_fitt,
+            'fitparamlimit': fitparamlimit,
+            'particle_num': int(pso_params.get('particles', 20)),
+            'optim_iterations': int(pso_params.get('iterations', 100)),
+            'c1': float(pso_params.get('c1', 0.1)),
+            'c2': float(pso_params.get('c2', 0.4)),
+            'w': float(pso_params.get('w', 0.7)),
+            'stopping_treshold': float(pso_params.get('stopping_threshold', 0.0001)),
+            'stopping_obj': float(pso_params.get('stopping_MSE', 0.1)),
+            'optim_debug': bool(pso_params.get('debug', False)),
+        }
+
+        simulation_model_setting = {
+            'simulation_type': case_parameters.get('SimulationType', 'hysys'),
+            'hy_filename': sim_file_path,
+            'cols_mapping': case_parameters,
+            'resultindict': False,
+            'inputparam_in_colsmapping': 'InputParams',
+            'outparam_in_colsmapping': 'OutputParameters',
+        }
+        # Backward compatibility for older case records where x_cols/y_cols
+        # were not persisted yet in case.parameters.
+        if not case_parameters.get('x_cols'):
+            simulation_model_setting['x_cols'] = surrogate_input_params
+        if not case_parameters.get('y_cols'):
+            simulation_model_setting['y_cols'] = surrogate_output_params
+        surrogate_model_settings = {'load_path': surrogate_model_dir}
+
+        workflow = CalibrationWorkflow(
+            process_df,
+            workflow_settings=merged_workflow_settings,
+            calibration_settings=calibration_settings,
+        )
+        if progress_callback:
+            workflow.set_progress_callback(progress_callback)
+        workflow.set_simulation_model(simulation_model_setting=simulation_model_setting)
+        workflow.set_surrogate_model(surrogate_model_settings=surrogate_model_settings)
+        workflow.init_models()
+        workflow.init_online_learning(
+            training_df,
+            batch_size=int(online_learning_settings.get('batch_size', 1)),
+            replay_ratio=float(online_learning_settings.get('replay_ratio', 0.015)),
+            retrain_scaler=bool(online_learning_settings.get('retrain_scaler', False)),
+            retrain_type=online_learning_settings.get('retrain_type', 'incremental'),
+        )
+        workflow.run_calibration()
+        workflow_results = workflow.get_results()
+
+        row_details = []
+        rel_errors = []
+        for idx, result in enumerate(workflow_results, start=1):
+            target = result.get('Target') or {}
+            sim_result = result.get('Validation_Base_SimulationRes') or {}
+            sim_outputs = extract_flat_output_values(sim_result)
+            surrogate_pred = result.get('Calibration_Base_SurrogatePred') or {}
+
+            metrics = {}
+            for param, target_val in target.items():
+                if param not in sim_outputs:
+                    continue
+                sim_val = sim_outputs.get(param)
+                if sim_val is None:
+                    continue
+
+                sim_abs = abs(float(target_val) - float(sim_val))
+                sim_rel = (sim_abs / abs(float(target_val)) * 100.0) if float(target_val) != 0 else float('inf')
+                metrics[param] = {
+                    'true_value': float(target_val),
+                    'simulation_value': float(sim_val),
+                    'sim_absolute_error': sim_abs,
+                    'sim_relative_error': sim_rel,
+                }
+                if param in surrogate_pred:
+                    surr_val = float(surrogate_pred[param])
+                    surr_abs = abs(float(target_val) - surr_val)
+                    surr_rel = (surr_abs / abs(float(target_val)) * 100.0) if float(target_val) != 0 else float('inf')
+                    metrics[param].update({
+                        'surrogate_value': surr_val,
+                        'surr_absolute_error': surr_abs,
+                        'surr_relative_error': surr_rel,
+                    })
+
+                if np.isfinite(sim_rel):
+                    rel_errors.append(sim_rel)
+
+            row_details.append({
+                'row_index': idx,
+                'success': result.get('Final_Calibration_Result_IOs') is not None,
+                'input_data': result.get('OriginalFactors') or {},
+                'calibration_result': result.get('Final_Calibration_Result_IOs') or {},
+                'simulation_result': sim_result,
+                'surrogate_result': surrogate_pred,
+                'metrics': metrics,
+                'overall_metrics': {
+                    'sim_mean_rel_error': float(np.mean([m['sim_relative_error'] for m in metrics.values() if np.isfinite(m['sim_relative_error'])])) if metrics else None
+                },
+                'iterations_run': result.get('Calibration_Base_IterationNum'),
+                'costs_curve': result.get('Calibration_Base_Costs') or [],
+                'final_cost': result.get('Final_Calibration_SimCost'),
+                'workflow_meta': {
+                    'final_calibration_type': result.get('Final_Calibration_Type'),
+                    'validation_accurate': result.get('Validation_Base_Accurate'),
+                    'local_improvement': result.get('LocalImprovement'),
+                    'global_retention': result.get('GlobalRetention'),
+                    'used_surrogate_version': result.get('Used_Surrogate_version'),
+                    'new_surrogate_version': result.get('New_Surrogate_version'),
+                }
+            })
+
+        total_rows = len(row_details)
+        successful_runs = sum(1 for row in row_details if row.get('success'))
+        summary = {
+            'total_rows': total_rows,
+            'successful_runs': successful_runs,
+            'failed_runs': total_rows - successful_runs,
+            'success_rate': (successful_runs / total_rows * 100.0) if total_rows else 0.0,
+            'mean_sim_rel_error': float(np.mean(rel_errors)) if rel_errors else None,
+        }
+
+        return {
+            "success": True,
+            "row_details": convert_numpy_to_python(row_details),
+            "summary": convert_numpy_to_python(summary),
+            "configuration": {
+                "workflow_settings": merged_workflow_settings,
+                "calibration_settings": calibration_settings,
+                "online_learning_settings": online_learning_settings,
+                "surrogate_id": surrogate_id,
+                "use_surrogate": True,
+                "total_rows": total_rows,
+                "training_dataset_name": training_info.get('dataset_name'),
+                "training_dataset_size": training_info.get('dataset_rows'),
+            }
+        }
+    finally:
+        try:
+            if workflow and workflow.simulation_model:
+                workflow.simulation_model.close()
+        except Exception:
+            pass
+
+
+@calibration_bp.route('/api/run_online_calibration', methods=['POST'])
+def run_online_calibration():
+    """
+    Start online-learning-based calibration workflow as background job.
+    """
+    try:
+        payload = request.json or {}
+        job_id = str(uuid.uuid4())
+        app = current_app._get_current_object()
+        _set_online_job_state(
+            job_id,
+            status='queued',
+            progress=0,
+            current_row=0,
+            total_rows=0,
+            message='Queued',
+            result=None,
+            error=None,
+        )
+
+        def _worker():
+            with app.app_context():
+                try:
+                    def progress_cb(current, total, sample_id, stage):
+                        pct = int((current / total) * 100) if total else 0
+                        msg = f"{stage}: row {current}/{total}" if total else stage
+                        _set_online_job_state(
+                            job_id,
+                            # Keep status running during progress updates; final completion
+                            # is set only once the full result payload is attached.
+                            status='running',
+                            progress=pct,
+                            current_row=int(current) if current is not None else 0,
+                            total_rows=int(total) if total is not None else 0,
+                            current_sample_id=make_json_safe(sample_id),
+                            message=msg
+                        )
+
+                    _set_online_job_state(job_id, status='running', message='Starting workflow')
+                    result = _execute_online_calibration(payload, progress_callback=progress_cb)
+                    _set_online_job_state(job_id, status='completed', progress=100, message='Completed', result=result)
+                except Exception as e:
+                    app.logger.error(f"Error in run_online_calibration worker: {str(e)}", exc_info=True)
+                    _set_online_job_state(job_id, status='failed', message='Failed', error=str(e))
+
+        Thread(target=_worker, daemon=True).start()
+        return jsonify({"success": True, "job_id": job_id})
+    except Exception as e:
+        current_app.logger.error(f"Error in run_online_calibration: {str(e)}")
+        return jsonify({"error": f"Error during online calibration: {str(e)}"}), 500
+
+
+@calibration_bp.route('/api/online_calibration_status/<job_id>', methods=['GET'])
+def online_calibration_status(job_id):
+    """Get progress and result for an online calibration background job."""
+    with ONLINE_CALIBRATION_LOCK:
+        job = ONLINE_CALIBRATION_JOBS.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+    safe_job = make_json_safe(job)
+    if safe_job.get('status') != 'completed' and 'result' in safe_job:
+        safe_job = dict(safe_job)
+        safe_job.pop('result', None)
+    return jsonify(safe_job)
+
+
+@calibration_bp.route('/api/save_online_results', methods=['POST'])
+def save_online_results():
+    """
+    Save online learning calibration results to database.
+    """
+    try:
+        data = request.json or {}
+        payload = data.get('data', {})
+
+        result_data = {
+            'row_details': payload.get('row_details', []),
+            'summary': payload.get('summary', {}),
+            'configuration': payload.get('configuration', {}),
+            'batch_results': payload.get('row_details', []),
+            'batch_metrics': {
+                'batch_sim_mean_rel_error': payload.get('summary', {}).get('mean_sim_rel_error')
+            },
+        }
+
+        result = SimulationResult(
+            name=data.get('name', f"Online Calibration {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"),
+            case_id=data.get('case_id'),
+            simulation_type=data.get('simulation_type', 'Online Calibration (PSO)'),
+            data=convert_numpy_to_python(result_data),
+            timestamp=datetime.now()
+        )
+        db.session.add(result)
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "result_id": result.id,
+            "summary": result_data['summary']
+        })
+    except Exception as e:
+        current_app.logger.error(f"Error in save_online_results: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@calibration_bp.route('/online_details/<int:result_id>', methods=['GET'])
+def online_calibration_details(result_id):
+    """
+    Render details for online calibration runs.
+    """
+    try:
+        calibration = SimulationResult.query.get_or_404(result_id)
+        if not calibration.simulation_type.startswith('Online Calibration'):
+            flash("The requested result is not an online calibration run", "warning")
+            return redirect(url_for('calibration.index'))
+
+        data = calibration.data if calibration.data else {}
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except Exception:
+                data = {}
+        row_details = data.get('row_details', [])
+        summary = data.get('summary', {})
+        batch_metrics = data.get('batch_metrics', {})
+        configuration = data.get('configuration', {})
+
+        return render_template(
+            'calibration/online_calibration_details.html',
+            calibration=calibration,
+            data=data,
+            summary=summary,
+            configuration=configuration,
+            row_details=row_details,
+            batch_metrics=batch_metrics,
+            float=float,
+        )
+    except Exception as e:
+        current_app.logger.error(f"Error in online_calibration_details: {str(e)}")
+        flash(f"An error occurred: {str(e)}", "danger")
+        return redirect(url_for('calibration.index'))
+
 @calibration_bp.route('/api/upload_batch_excel', methods=['POST'])
 def upload_batch_excel():
     """
@@ -866,18 +1476,21 @@ def upload_batch_excel():
         if file.filename == '':
             return jsonify({"error": "No file selected"}), 400
         
-        if not file.filename.lower().endswith(('.xlsx', '.xls')):
-            return jsonify({"error": "File must be an Excel file (.xlsx or .xls)"}), 400
+        if not file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
+            return jsonify({"error": "File must be an Excel or CSV file (.xlsx, .xls, .csv)"}), 400
         
-        # Read Excel file
+        # Read input file
         try:
-            df = pd.read_excel(file)
+            if file.filename.lower().endswith('.csv'):
+                df = pd.read_csv(file)
+            else:
+                df = pd.read_excel(file)
         except Exception as e:
-            return jsonify({"error": f"Error reading Excel file: {str(e)}"}), 400
+            return jsonify({"error": f"Error reading file: {str(e)}"}), 400
         
         # Validate that we have data
         if df.empty:
-            return jsonify({"error": "Excel file is empty"}), 400
+            return jsonify({"error": "Uploaded file is empty"}), 400
         
         # Get column names
         columns = df.columns.tolist()
@@ -1582,9 +2195,10 @@ def save_batch_results():
                             detailed_df = pd.DataFrame(detailed_data)
                             detailed_df.to_excel(writer, sheet_name=sheet_name, index=False)
             
-            # Update result with file path
-            result.file_path = result_path
-            db.session.commit()
+            # Update result with file path when schema supports it.
+            if hasattr(result, 'file_path'):
+                result.file_path = result_path
+                db.session.commit()
             
         except Exception as e:
             current_app.logger.error(f"Error creating Excel file: {str(e)}")

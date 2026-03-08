@@ -1,0 +1,676 @@
+{% extends "base.html" %}
+
+{% block title %}Online Learning Calibration | Simulation Platform{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="bi bi-arrow-repeat text-info me-2"></i>Online Learning Calibration</h1>
+        <a href="{{ url_for('calibration.index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Back to Calibration
+        </a>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="card-title mb-0">Workflow Setup</h5>
+        </div>
+        <div class="card-body">
+            <form id="onlineForm">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Run Name</label>
+                        <input id="runName" class="form-control" placeholder="Online Calibration run name">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Case</label>
+                        <select id="caseSelect" class="form-select" required>
+                            <option value="" selected disabled>Select case</option>
+                            {% for case in cases %}
+                            <option value="{{ case.id }}">{{ case.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Surrogate Model</label>
+                        <select id="surrogateSelect" class="form-select" required>
+                            <option value="" selected disabled>Select surrogate</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Workflow Data (Excel/CSV)</label>
+                        <input id="workflowFile" type="file" class="form-control" accept=".xlsx,.xls,.csv" required>
+                        <div class="form-text">Rows must contain selected calibration inputs and target outputs.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Replay Training Dataset (from surrogate)</label>
+                        <input id="trainingDatasetName" class="form-control mb-2" type="text" readonly value="Select surrogate model">
+                        <input id="trainingDatasetSize" class="form-control" type="text" readonly value="Sample count: -">
+                    </div>
+                </div>
+
+                <hr>
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Calibration Inputs (min/max)</h6>
+                        <div id="inputParamsContainer" class="table-responsive"></div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Target Outputs (weight/sdev)</h6>
+                        <div id="outputParamsContainer" class="table-responsive"></div>
+                    </div>
+                </div>
+
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">Workflow Data Coverage</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-2">Checks whether selected required input/output parameters exist in the uploaded workflow file.</p>
+                        <div id="workflowCoverageContainer" class="table-responsive">
+                            <div class="text-muted">Upload workflow data and select parameters to see coverage.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">Workflow Calibration Settings</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Point Selection</label>
+                                <select id="pointSelectionType" class="form-select">
+                                    <option value="conditional">conditional</option>
+                                    <option value="always-one">always-one</option>
+                                    <option value="always-both">always-both</option>
+                                </select>
+                                <div class="form-text">How new points are selected for online update.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Validation Threshold</label>
+                                <input id="simValidationThreshold" class="form-control" type="number" value="0.1" step="0.001">
+                                <div class="form-text">If validation cost is above this value, point is considered inaccurate.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Base Error Factor</label>
+                                <input id="baseErrorFactor" class="form-control" type="number" value="0.1" step="0.01">
+                                <div class="form-text">Scales base calibration stopping criteria.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">OL Batch Size</label>
+                                <input id="olBatchSize" class="form-control" type="number" value="1" min="1">
+                                <div class="form-text">Retrain after collecting this many new samples.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Replay Ratio</label>
+                                <input id="replayRatio" class="form-control" type="number" value="0.015" step="0.001">
+                                <div class="form-text">Share of original training samples reused during retraining.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Retrain Type</label>
+                                <select id="retrainType" class="form-select">
+                                    <option value="incremental">incremental</option>
+                                    <option value="cumulative">cumulative</option>
+                                    <option value="hybrid">hybrid</option>
+                                </select>
+                                <div class="form-text">Online model update strategy.</div>
+                            </div>
+                            <div class="col-md-12">
+                                <div class="form-check mt-2">
+                                    <input id="runDirectForNotAccurate" type="checkbox" class="form-check-input" checked>
+                                    <label for="runDirectForNotAccurate" class="form-check-label">Run direct calibration when validation is not accurate</label>
+                                </div>
+                                <div class="form-text">Fallback to flowsheet-based direct optimization when surrogate-based result is not accurate enough.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">Optimizer Settings</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Optimizer</label>
+                                <select id="optimizerSelect" class="form-select">
+                                    <option value="pso" selected>Particle Swarm Optimization (PSO)</option>
+                                </select>
+                                <div class="form-text">Optimizer-specific parameters are shown below.</div>
+                            </div>
+                        </div>
+
+                        <div id="psoSettingsContainer" class="row g-3 mt-1">
+                            <div class="col-md-2">
+                                <label class="form-label">Particles</label>
+                                <input id="particles" class="form-control" type="number" value="20" min="2">
+                                <div class="form-text">Population size.</div>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Iterations</label>
+                                <input id="iterations" class="form-control" type="number" value="100" min="1">
+                                <div class="form-text">Maximum optimization steps.</div>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">c1</label>
+                                <input id="c1" class="form-control" type="number" value="0.1" step="0.01">
+                                <div class="form-text">Cognitive factor.</div>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">c2</label>
+                                <input id="c2" class="form-control" type="number" value="0.4" step="0.01">
+                                <div class="form-text">Social factor.</div>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">w</label>
+                                <input id="w" class="form-control" type="number" value="0.7" step="0.01">
+                                <div class="form-text">Inertia weight.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 d-flex justify-content-end gap-2">
+                    <button id="runBtn" type="button" class="btn btn-info text-white" disabled>
+                        <i class="bi bi-play-fill me-1"></i>Run Online Calibration
+                    </button>
+                    <button id="saveBtn" type="button" class="btn btn-success" disabled>
+                        <i class="bi bi-save me-1"></i>Save Run
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card mb-4 d-none" id="progressCard">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Calibration Progress</h5>
+        </div>
+        <div class="card-body">
+            <div class="progress mb-2">
+                <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%">0%</div>
+            </div>
+            <div id="progressText" class="text-muted">Waiting to start...</div>
+        </div>
+    </div>
+
+    <div class="card d-none" id="resultsCard">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Run Summary</h5>
+        </div>
+        <div class="card-body">
+            <div id="summaryText" class="mb-3"></div>
+            <div class="table-responsive">
+                <table class="table table-sm table-striped">
+                    <thead>
+                        <tr>
+                            <th>Row</th>
+                            <th>Status</th>
+                            <th>Final Type</th>
+                            <th>Mean Rel Error (%)</th>
+                            <th>Final Cost</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const caseSelect = document.getElementById('caseSelect');
+    const surrogateSelect = document.getElementById('surrogateSelect');
+    const workflowFile = document.getElementById('workflowFile');
+    const optimizerSelect = document.getElementById('optimizerSelect');
+    const psoSettingsContainer = document.getElementById('psoSettingsContainer');
+    const trainingDatasetName = document.getElementById('trainingDatasetName');
+    const trainingDatasetSize = document.getElementById('trainingDatasetSize');
+    const runBtn = document.getElementById('runBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const inputParamsContainer = document.getElementById('inputParamsContainer');
+    const outputParamsContainer = document.getElementById('outputParamsContainer');
+    const workflowCoverageContainer = document.getElementById('workflowCoverageContainer');
+    const progressCard = document.getElementById('progressCard');
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    const resultsCard = document.getElementById('resultsCard');
+    const resultsBody = document.getElementById('resultsBody');
+    const summaryText = document.getElementById('summaryText');
+
+    let caseInfo = null;
+    let workflowData = null;
+    let surrogateModels = [];
+    let parameterRanges = {};
+    let onlineResults = null;
+    let pollingTimer = null;
+    let pollingFailureCount = 0;
+
+    optimizerSelect.addEventListener('change', updateOptimizerSettingsVisibility);
+    updateOptimizerSettingsVisibility();
+
+    caseSelect.addEventListener('change', async () => {
+        const caseId = caseSelect.value;
+        if (!caseId) return;
+
+        const [caseRes, surrogateRes] = await Promise.all([
+            fetch(`/calibration/api/case_info/${caseId}`),
+            fetch(`/calibration/api/surrogate_models/${caseId}`),
+        ]);
+        caseInfo = await caseRes.json();
+        const surrogateData = await surrogateRes.json();
+        surrogateModels = surrogateData.models || [];
+
+        surrogateSelect.innerHTML = '<option value="" selected disabled>Select surrogate</option>';
+        surrogateModels.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model.id;
+            option.textContent = model.name;
+            surrogateSelect.appendChild(option);
+        });
+
+        renderInputParams(caseInfo.input_params || {});
+        renderOutputParams(caseInfo.output_params || {});
+        parameterRanges = {};
+        updateWorkflowCoverageView();
+        validateRunAvailability();
+    });
+
+    workflowFile.addEventListener('change', async () => {
+        workflowData = await uploadFile(workflowFile.files[0]);
+        updateWorkflowCoverageView();
+        validateRunAvailability();
+    });
+
+    surrogateSelect.addEventListener('change', () => {
+        const model = surrogateModels.find(m => String(m.id) === String(surrogateSelect.value));
+        if (model) {
+            const datasetName = model.training_dataset_name || 'training_data.csv';
+            const datasetSize = model.training_dataset_size;
+            trainingDatasetName.value = datasetName;
+            trainingDatasetSize.value = `Sample count: ${datasetSize != null ? datasetSize : 'N/A'}`;
+            fetchParameterRanges(caseSelect.value, surrogateSelect.value);
+        } else {
+            trainingDatasetName.value = 'Select surrogate model';
+            trainingDatasetSize.value = 'Sample count: -';
+            parameterRanges = {};
+            renderInputParams((caseInfo && caseInfo.input_params) ? caseInfo.input_params : {});
+        }
+        updateWorkflowCoverageView();
+        validateRunAvailability();
+    });
+
+    runBtn.addEventListener('click', async () => {
+        runBtn.disabled = true;
+        runBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Starting...';
+        saveBtn.disabled = true;
+        resultsCard.classList.add('d-none');
+        progressCard.classList.remove('d-none');
+        updateProgress(0, 'Starting workflow...');
+        try {
+            const payload = buildPayload();
+            const response = await fetch('/calibration/api/run_online_calibration', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await response.json();
+            if (!response.ok || !data.job_id) throw new Error(data.error || 'Failed to start online calibration');
+            startStatusPolling(data.job_id);
+        } catch (error) {
+            alert(error.message);
+            updateProgress(0, `Error: ${error.message}`);
+            runBtn.disabled = false;
+            runBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Online Calibration';
+        }
+    });
+
+    function startStatusPolling(jobId) {
+        if (pollingTimer) clearInterval(pollingTimer);
+        pollingFailureCount = 0;
+        pollingTimer = setInterval(async () => {
+            try {
+                const response = await fetch(`/calibration/api/online_calibration_status/${jobId}`);
+                const rawText = await response.text();
+                let status = {};
+                try {
+                    status = rawText ? JSON.parse(rawText) : {};
+                } catch (_) {
+                    throw new Error(rawText || 'Invalid status response');
+                }
+                if (!response.ok) throw new Error(status.error || 'Failed to get status');
+
+                const pct = Number(status.progress || 0);
+                let text = status.message || 'Running...';
+                if (status.total_rows) {
+                    text = `Processing row ${status.current_row || 0}/${status.total_rows}. ${status.message || ''}`.trim();
+                }
+                updateProgress(pct, text);
+                pollingFailureCount = 0;
+
+                if (status.status === 'completed') {
+                    if (!status.result) {
+                        updateProgress(pct, 'Finalizing results...');
+                        return;
+                    }
+                    clearInterval(pollingTimer);
+                    pollingTimer = null;
+                    onlineResults = status.result;
+                    renderResults(onlineResults);
+                    saveBtn.disabled = false;
+                    runBtn.disabled = false;
+                    runBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Online Calibration';
+                } else if (status.status === 'failed') {
+                    clearInterval(pollingTimer);
+                    pollingTimer = null;
+                    runBtn.disabled = false;
+                    runBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Online Calibration';
+                    updateProgress(pct, `Failed: ${status.error || status.message || 'Unknown error'}`);
+                    alert(status.error || 'Calibration failed');
+                }
+            } catch (error) {
+                pollingFailureCount += 1;
+                if (pollingFailureCount < 5) {
+                    updateProgress(progressBar.textContent.replace('%', ''), `Connection retry ${pollingFailureCount}/4: ${error.message}`);
+                    return;
+                }
+                clearInterval(pollingTimer);
+                pollingTimer = null;
+                runBtn.disabled = false;
+                runBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Online Calibration';
+                updateProgress(0, `Error: ${error.message}`);
+                alert(error.message);
+            }
+        }, 1000);
+    }
+
+    function updateProgress(percent, text) {
+        const pct = Math.max(0, Math.min(100, Number(percent || 0)));
+        progressBar.style.width = `${pct}%`;
+        progressBar.textContent = `${pct}%`;
+        progressText.textContent = text || '';
+        if (pct >= 100) {
+            progressBar.classList.remove('progress-bar-animated');
+        } else {
+            progressBar.classList.add('progress-bar-animated');
+        }
+    }
+
+    saveBtn.addEventListener('click', async () => {
+        if (!onlineResults) return;
+        saveBtn.disabled = true;
+        try {
+            const savePayload = {
+                name: document.getElementById('runName').value || `Online Calibration ${new Date().toLocaleString()}`,
+                case_id: parseInt(caseSelect.value, 10),
+                simulation_type: 'Online Calibration (PSO)',
+                data: onlineResults,
+            };
+            const response = await fetch('/calibration/api/save_online_results', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(savePayload),
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Failed to save results');
+            window.location.href = `/calibration/online_details/${data.result_id}`;
+        } catch (error) {
+            alert(error.message);
+            saveBtn.disabled = false;
+        }
+    });
+
+    async function uploadFile(file) {
+        if (!file) return null;
+        const formData = new FormData();
+        formData.append('excel_file', file);
+        const response = await fetch('/calibration/api/upload_batch_excel', {
+            method: 'POST',
+            body: formData,
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'File upload failed');
+        return data;
+    }
+
+    async function fetchParameterRanges(caseId, surrogateId) {
+        if (!caseId || !surrogateId) return;
+        try {
+            const response = await fetch(`/calibration/api/parameter_ranges/${caseId}?surrogate_id=${surrogateId}`);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Failed to load parameter ranges');
+            parameterRanges = data.parameter_ranges || {};
+            renderInputParams((caseInfo && caseInfo.input_params) ? caseInfo.input_params : {});
+        } catch (error) {
+            parameterRanges = {};
+            renderInputParams((caseInfo && caseInfo.input_params) ? caseInfo.input_params : {});
+        }
+    }
+
+    function renderInputParams(inputParams) {
+        const rows = Object.entries(inputParams).map(([name, cfg]) => {
+            const rangeInfo = parameterRanges[name] || {};
+            const minVal = rangeInfo.training_min != null ? rangeInfo.training_min : (cfg.min ?? 0);
+            const maxVal = rangeInfo.training_max != null ? rangeInfo.training_max : (cfg.max ?? 1);
+            const sourceBadge = rangeInfo.source === 'surrogate_training_data'
+                ? '<span class="badge bg-info ms-2">Surrogate range</span>'
+                : '';
+            return `
+                <tr>
+                    <td><input class="form-check-input calibrate-check" type="checkbox" data-param="${name}" checked> ${name}${sourceBadge}</td>
+                    <td><input class="form-control form-control-sm min-input" data-param="${name}" type="number" value="${minVal}"></td>
+                    <td><input class="form-control form-control-sm max-input" data-param="${name}" type="number" value="${maxVal}"></td>
+                </tr>
+            `;
+        }).join('');
+        inputParamsContainer.innerHTML = `
+            <table class="table table-sm">
+                <thead><tr><th>Parameter</th><th>Min</th><th>Max</th></tr></thead>
+                <tbody>${rows || '<tr><td colspan="3">No input parameters found</td></tr>'}</tbody>
+            </table>
+        `;
+        bindParameterSelectionEvents();
+        updateWorkflowCoverageView();
+    }
+
+    function renderOutputParams(outputParams) {
+        const rows = Object.entries(outputParams).map(([name, cfg]) => `
+            <tr>
+                <td><input class="form-check-input output-check" type="checkbox" data-param="${name}" checked> ${name}</td>
+                <td><input class="form-control form-control-sm weight-input" data-param="${name}" type="number" value="${cfg.weight ?? 1}" step="0.01"></td>
+                <td><input class="form-control form-control-sm sdev-input" data-param="${name}" type="number" value="${cfg.sdev ?? 0.1}" step="0.01"></td>
+            </tr>
+        `).join('');
+        outputParamsContainer.innerHTML = `
+            <table class="table table-sm">
+                <thead><tr><th>Parameter</th><th>Weight</th><th>SDEV</th></tr></thead>
+                <tbody>${rows || '<tr><td colspan="3">No output parameters found</td></tr>'}</tbody>
+            </table>
+        `;
+        bindParameterSelectionEvents();
+        updateWorkflowCoverageView();
+    }
+
+    function bindParameterSelectionEvents() {
+        document.querySelectorAll('.calibrate-check, .output-check').forEach(el => {
+            el.removeEventListener('change', onParameterSelectionChange);
+            el.addEventListener('change', onParameterSelectionChange);
+        });
+    }
+
+    function onParameterSelectionChange() {
+        updateWorkflowCoverageView();
+        validateRunAvailability();
+    }
+
+    function updateWorkflowCoverageView() {
+        if (!workflowData || !Array.isArray(workflowData.columns)) {
+            workflowCoverageContainer.innerHTML = '<div class="text-muted">Upload workflow data and select parameters to see coverage.</div>';
+            return;
+        }
+
+        const selectedModel = surrogateModels.find(m => String(m.id) === String(surrogateSelect.value));
+        const modelInputs = selectedModel && Array.isArray(selectedModel.active_inputs) ? selectedModel.active_inputs : [];
+        const modelOutputs = selectedModel && Array.isArray(selectedModel.active_outputs) ? selectedModel.active_outputs : [];
+        const selectedInputs = Array.from(document.querySelectorAll('.calibrate-check:checked')).map(el => el.dataset.param);
+        const selectedOutputs = Array.from(document.querySelectorAll('.output-check:checked')).map(el => el.dataset.param);
+        const columns = workflowData.columns;
+        const requiredInputs = modelInputs.length ? modelInputs : selectedInputs;
+        const requiredOutputs = modelOutputs.length ? modelOutputs : selectedOutputs;
+        const requiredItems = [
+            ...requiredInputs.map(p => ({ type: 'Input', name: p })),
+            ...requiredOutputs.map(p => ({ type: 'Output', name: p })),
+        ];
+
+        if (requiredItems.length === 0) {
+            workflowCoverageContainer.innerHTML = '<div class="text-muted">Select at least one input or output parameter.</div>';
+            return;
+        }
+
+        const rows = requiredItems.map(item => {
+            const exists = columns.includes(item.name);
+            return `
+                <tr>
+                    <td>${item.type}</td>
+                    <td>${item.name}</td>
+                    <td>${exists ? '<span class="badge bg-success">Found</span>' : '<span class="badge bg-danger">Missing</span>'}</td>
+                </tr>
+            `;
+        }).join('');
+
+        workflowCoverageContainer.innerHTML = `
+            <table class="table table-sm mb-0">
+                <thead><tr><th>Type</th><th>Parameter</th><th>In Workflow Data</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        `;
+    }
+
+    function hasAllRequiredColumnsInWorkflowData() {
+        if (!workflowData || !Array.isArray(workflowData.columns)) return false;
+        const selectedModel = surrogateModels.find(m => String(m.id) === String(surrogateSelect.value));
+        const modelInputs = selectedModel && Array.isArray(selectedModel.active_inputs) ? selectedModel.active_inputs : [];
+        const modelOutputs = selectedModel && Array.isArray(selectedModel.active_outputs) ? selectedModel.active_outputs : [];
+        const selectedInputs = Array.from(document.querySelectorAll('.calibrate-check:checked')).map(el => el.dataset.param);
+        const selectedOutputs = Array.from(document.querySelectorAll('.output-check:checked')).map(el => el.dataset.param);
+        const requiredInputs = modelInputs.length ? modelInputs : selectedInputs;
+        const requiredOutputs = modelOutputs.length ? modelOutputs : selectedOutputs;
+        const required = [...requiredInputs, ...requiredOutputs];
+        if (required.length === 0) return false;
+        return required.every(param => workflowData.columns.includes(param));
+    }
+
+    function buildPayload() {
+        const calibrateParams = {};
+        const outputParams = {};
+        const weights = {};
+        const sdevs = {};
+
+        document.querySelectorAll('.calibrate-check:checked').forEach(check => {
+            const param = check.dataset.param;
+            const min = parseFloat(document.querySelector(`.min-input[data-param="${param}"]`).value);
+            const max = parseFloat(document.querySelector(`.max-input[data-param="${param}"]`).value);
+            calibrateParams[param] = { min, max };
+        });
+
+        document.querySelectorAll('.output-check:checked').forEach(check => {
+            const param = check.dataset.param;
+            const weight = parseFloat(document.querySelector(`.weight-input[data-param="${param}"]`).value);
+            const sdev = parseFloat(document.querySelector(`.sdev-input[data-param="${param}"]`).value);
+            outputParams[param] = { weight, sdev };
+            weights[param] = weight;
+            sdevs[param] = sdev;
+        });
+
+        return {
+            name: document.getElementById('runName').value || `Online Calibration ${new Date().toLocaleString()}`,
+            case_id: parseInt(caseSelect.value, 10),
+            use_surrogate: true,
+            surrogate_id: parseInt(surrogateSelect.value, 10),
+            optimizer: optimizerSelect.value,
+            excel_data: workflowData,
+            calibrate_params: calibrateParams,
+            output_params: outputParams,
+            weights,
+            sdevs,
+            pso_params: {
+                particles: parseInt(document.getElementById('particles').value, 10),
+                iterations: parseInt(document.getElementById('iterations').value, 10),
+                c1: parseFloat(document.getElementById('c1').value),
+                c2: parseFloat(document.getElementById('c2').value),
+                w: parseFloat(document.getElementById('w').value),
+                stopping_threshold: 0.0001,
+                stopping_MSE: 0.1,
+                debug: false,
+            },
+            workflow_settings: {
+                run_direct_for_not_accurate: document.getElementById('runDirectForNotAccurate').checked,
+                sim_validation_treshold: parseFloat(document.getElementById('simValidationThreshold').value),
+                base_calibration_error_factor: parseFloat(document.getElementById('baseErrorFactor').value),
+                point_selection_type: document.getElementById('pointSelectionType').value,
+                logging_level: 'INFO',
+                use_flowsheet_model: true,
+                mimic_flowsheet_calibration: false,
+            },
+            online_learning_settings: {
+                batch_size: parseInt(document.getElementById('olBatchSize').value, 10),
+                replay_ratio: parseFloat(document.getElementById('replayRatio').value),
+                retrain_scaler: false,
+                retrain_type: document.getElementById('retrainType').value,
+            },
+        };
+    }
+
+    function renderResults(data) {
+        if (!data || typeof data !== 'object') {
+            throw new Error('Online calibration completed but result payload is missing.');
+        }
+        const summary = data.summary || {};
+        summaryText.innerHTML = `
+            <strong>Total:</strong> ${summary.total_rows ?? 0} |
+            <strong>Success:</strong> ${summary.successful_runs ?? 0} |
+            <strong>Failed:</strong> ${summary.failed_runs ?? 0} |
+            <strong>Mean Error:</strong> ${summary.mean_sim_rel_error != null ? Number(summary.mean_sim_rel_error).toFixed(4) + '%' : 'N/A'}
+        `;
+
+        resultsBody.innerHTML = '';
+        (data.row_details || []).forEach(row => {
+            const finalType = (row.workflow_meta && row.workflow_meta.final_calibration_type) ? row.workflow_meta.final_calibration_type : 'N/A';
+            const meanError = (row.overall_metrics && row.overall_metrics.sim_mean_rel_error != null) ? row.overall_metrics.sim_mean_rel_error : null;
+            resultsBody.innerHTML += `
+                <tr>
+                    <td>${row.row_index}</td>
+                    <td>${row.success ? '<span class="badge bg-success">Success</span>' : '<span class="badge bg-danger">Failed</span>'}</td>
+                    <td>${finalType}</td>
+                    <td>${meanError != null ? Number(meanError).toFixed(4) : 'N/A'}</td>
+                    <td>${row.final_cost != null ? Number(row.final_cost).toExponential(3) : 'N/A'}</td>
+                </tr>
+            `;
+        });
+
+        resultsCard.classList.remove('d-none');
+        resultsCard.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function validateRunAvailability() {
+        const model = surrogateModels.find(m => String(m.id) === String(surrogateSelect.value));
+        const hasTraining = model && model.has_training_dataset;
+        const hasCoverage = hasAllRequiredColumnsInWorkflowData();
+        runBtn.disabled = !(caseSelect.value && surrogateSelect.value && workflowData && hasTraining && hasCoverage);
+    }
+
+    function updateOptimizerSettingsVisibility() {
+        const optimizer = optimizerSelect.value;
+        psoSettingsContainer.classList.toggle('d-none', optimizer !== 'pso');
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,488 @@
+{% extends "base.html" %}
+
+{% block title %}Online Calibration Results | {{ calibration.case.name }} | Simulation Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-arrow-repeat text-info me-2"></i>Online Calibration Results</h1>
+    <a href="{{ url_for('calibration.index') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-2"></i>Back to Calibration
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Run Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tbody>
+                        <tr><th style="width: 30%">Name:</th><td>{{ calibration.name }}</td></tr>
+                        <tr>
+                            <th>Case:</th>
+                            <td><a href="{{ url_for('cases.case_detail', case_id=calibration.case.id) }}">{{ calibration.case.name }}</a></td>
+                        </tr>
+                        <tr><th>Type:</th><td>{{ calibration.simulation_type }}</td></tr>
+                        <tr>
+                            <th>Completion:</th>
+                            <td>
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar bg-info" role="progressbar" style="width: 100%;">{{ summary.successful_runs or 0 }}/{{ summary.total_rows or 0 }}</div>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr><th>Success Rate:</th><td>{{ "%.2f"|format(summary.success_rate or 0) }}%</td></tr>
+                        <tr><th>Mean Relative Error:</th><td>{% if summary.mean_sim_rel_error is not none %}{{ "%.4f"|format(summary.mean_sim_rel_error) }}%{% else %}N/A{% endif %}</td></tr>
+                        <tr><th>Created:</th><td>{{ calibration.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('calibration.download_result', result_id=calibration.id) }}" class="btn btn-primary">
+                        <i class="bi bi-download me-2"></i> Download Results
+                    </a>
+                    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#visualizationModal">
+                        <i class="bi bi-graph-up me-2"></i> Visualizations
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" id="parameterSelectBtn">
+                        <i class="bi bi-gear-fill me-2"></i> Select Table Columns
+                    </button>
+                    <button type="button" class="btn btn-danger" id="deleteBtn">
+                        <i class="bi bi-trash me-2"></i> Delete Result
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Results Summary</h5>
+                <small class="text-muted">Row-level online workflow results</small>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" id="resultsTable">
+                        <thead>
+                            <tr><th>#</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="text-center">
+                                    <div class="spinner-border text-primary" role="status"></div>
+                                    <p class="mt-2 mb-0">Loading results data...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="resultsPagination" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">Confirm Deletion</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this online calibration result?</p>
+                <p class="text-danger mb-0">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="parameterSelectModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Select Columns to Display</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="paramSearchInput" placeholder="Search columns...">
+                        <button class="btn btn-outline-secondary" type="button" id="clearSearchBtn"><i class="bi bi-x"></i></button>
+                    </div>
+                </div>
+                <div id="columnList" style="max-height: 320px; overflow-y: auto;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="applyParamSelectBtn">Apply</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="visualizationModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Online Calibration Visualization</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Series Type</label>
+                        <select id="modalChartModeSelect" class="form-select">
+                            <option value="outputs" selected>Target Outputs</option>
+                            <option value="calibration_params">Calibration Parameters</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Select Parameter</label>
+                        <select id="modalChartParameterSelect" class="form-select"></select>
+                    </div>
+                    <div class="col-md-5 d-flex align-items-end">
+                        <div id="modalChartMetrics" class="small text-muted">Select a parameter to see metrics.</div>
+                    </div>
+                </div>
+                <div style="height: 520px;">
+                    <canvas id="modalParameterChart"></canvas>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const calibrationId = {{ calibration.id }};
+    const rowDetails = {{ row_details|tojson }};
+    const configuration = {{ configuration|tojson }};
+    const pageSize = 20;
+    let currentPage = 1;
+    let tableRows = [];
+    let allColumns = [];
+    let selectedColumns = [];
+    let modalParamChart = null;
+    let chartParameters = [];
+    let modalChartMode = 'outputs';
+
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    const parameterSelectModal = new bootstrap.Modal(document.getElementById('parameterSelectModal'));
+
+    function safeNum(v) {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+    }
+
+    function flattenRow(row) {
+        const flat = {
+            row_index: (row.row_index !== undefined ? row.row_index : null),
+            success: row.success ? 'Success' : 'Failed',
+            final_type: (row.workflow_meta && row.workflow_meta.final_calibration_type !== undefined) ? row.workflow_meta.final_calibration_type : null,
+            final_cost: safeNum(row.final_cost),
+            sim_mean_rel_error: safeNum(row.overall_metrics ? row.overall_metrics.sim_mean_rel_error : null),
+            used_surrogate_version: (row.workflow_meta && row.workflow_meta.used_surrogate_version !== undefined) ? row.workflow_meta.used_surrogate_version : null,
+            new_surrogate_version: (row.workflow_meta && row.workflow_meta.new_surrogate_version !== undefined) ? row.workflow_meta.new_surrogate_version : null,
+            local_improvement: safeNum(row.workflow_meta ? row.workflow_meta.local_improvement : null),
+            global_retention: safeNum(row.workflow_meta ? row.workflow_meta.global_retention : null)
+        };
+
+        const metrics = row.metrics || {};
+        Object.keys(metrics).forEach(param => {
+            flat[`${param}_true`] = safeNum(metrics[param].true_value);
+            flat[`${param}_calibrated`] = safeNum(metrics[param].simulation_value);
+            flat[`${param}_rel_error`] = safeNum(metrics[param].sim_relative_error);
+        });
+
+        return flat;
+    }
+
+    function initTableData() {
+        tableRows = (rowDetails || []).map(flattenRow);
+        if (tableRows.length === 0) {
+            allColumns = [];
+            selectedColumns = [];
+            return;
+        }
+        allColumns = Object.keys(tableRows[0]).filter(k => k !== 'row_index');
+        selectedColumns = [
+            'success', 'final_type', 'final_cost', 'sim_mean_rel_error',
+            'used_surrogate_version', 'new_surrogate_version'
+        ].filter(c => allColumns.includes(c));
+        if (selectedColumns.length < 4) {
+            selectedColumns = [...allColumns.slice(0, Math.min(10, allColumns.length))];
+        }
+    }
+
+    function formatValue(v) {
+        if (v === null || v === undefined) return 'N/A';
+        if (typeof v === 'number') return Number.isFinite(v) ? v.toFixed(6) : 'N/A';
+        return v;
+    }
+
+    function renderTable() {
+        const tableHeadRow = document.querySelector('#resultsTable thead tr');
+        const tableBody = document.querySelector('#resultsTable tbody');
+        const paginationContainer = document.getElementById('resultsPagination');
+
+        if (tableRows.length === 0) {
+            tableHeadRow.innerHTML = '<th>#</th>';
+            tableBody.innerHTML = '<tr><td class="text-center">No results available.</td></tr>';
+            paginationContainer.innerHTML = '';
+            return;
+        }
+
+        tableHeadRow.innerHTML = '<th>#</th>' + selectedColumns.map(c => `<th>${c}</th>`).join('');
+
+        const totalPages = Math.ceil(tableRows.length / pageSize);
+        const start = (currentPage - 1) * pageSize;
+        const end = Math.min(start + pageSize, tableRows.length);
+
+        tableBody.innerHTML = '';
+        for (let i = start; i < end; i++) {
+            const r = tableRows[i];
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${(r.row_index !== undefined && r.row_index !== null) ? r.row_index : (i + 1)}</td>` + selectedColumns.map(c => `<td>${formatValue(r[c])}</td>`).join('');
+            tableBody.appendChild(tr);
+        }
+
+        let paginationHtml = `
+            <nav aria-label="Results pagination"><ul class="pagination justify-content-center">
+                <li class="page-item ${currentPage === 1 ? 'disabled' : ''}"><a class="page-link" href="#" data-page="${currentPage - 1}">&laquo;</a></li>
+        `;
+        for (let p = 1; p <= totalPages; p++) {
+            paginationHtml += `<li class="page-item ${p === currentPage ? 'active' : ''}"><a class="page-link" href="#" data-page="${p}">${p}</a></li>`;
+        }
+        paginationHtml += `
+                <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}"><a class="page-link" href="#" data-page="${currentPage + 1}">&raquo;</a></li>
+            </ul></nav>
+            <div class="text-center text-muted">Showing ${start + 1} to ${end} of ${tableRows.length} rows</div>
+        `;
+        paginationContainer.innerHTML = paginationHtml;
+        paginationContainer.querySelectorAll('.page-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const p = parseInt(this.dataset.page, 10);
+                if (!Number.isNaN(p) && p >= 1 && p <= totalPages) {
+                    currentPage = p;
+                    renderTable();
+                }
+            });
+        });
+    }
+
+    function populateColumnSelector() {
+        const container = document.getElementById('columnList');
+        container.innerHTML = allColumns.map(c => `
+            <div class="form-check param-item">
+                <input class="form-check-input column-checkbox" type="checkbox" value="${c}" id="col_${c.replace(/[^a-zA-Z0-9_]/g, '_')}" ${selectedColumns.includes(c) ? 'checked' : ''}>
+                <label class="form-check-label" for="col_${c.replace(/[^a-zA-Z0-9_]/g, '_')}">${c}</label>
+            </div>
+        `).join('');
+    }
+
+    function getParametersForMode(mode) {
+        if (mode === 'calibration_params') {
+            const fitLimits = (configuration && configuration.calibration_settings && configuration.calibration_settings.fitparamlimit)
+                ? configuration.calibration_settings.fitparamlimit : {};
+            const configured = Object.keys(fitLimits || {});
+            if (configured.length) return configured;
+            const discovered = new Set();
+            (rowDetails || []).forEach(r => {
+                Object.keys(r.input_data || {}).forEach(k => discovered.add(k));
+                Object.keys(r.calibration_result || {}).forEach(k => discovered.add(k));
+                Object.keys(r.surrogate_result || {}).forEach(k => discovered.add(k));
+                const simInputs = (r.simulation_result && r.simulation_result.inputs) ? r.simulation_result.inputs : {};
+                Object.keys(simInputs || {}).forEach(k => discovered.add(k));
+            });
+            return [...discovered];
+        }
+
+        const yFitt = (configuration && configuration.calibration_settings && configuration.calibration_settings.y_fitt)
+            ? configuration.calibration_settings.y_fitt : {};
+        return Object.keys(yFitt).length
+            ? Object.keys(yFitt)
+            : [...new Set((rowDetails || []).flatMap(r => Object.keys(r.metrics || {})))];
+    }
+
+    function buildSeries(mode, param) {
+        const labels = [];
+        const refVals = [];
+        const calVals = [];
+        const absErr = [];
+        const relErr = [];
+
+        rowDetails.forEach((row, idx) => {
+            const label = `Row ${(row.row_index !== undefined && row.row_index !== null) ? row.row_index : (idx + 1)}`;
+
+            if (mode === 'calibration_params') {
+                const ref = safeNum((row.input_data || {})[param]);
+                const simInputs = (row.simulation_result && row.simulation_result.inputs) ? row.simulation_result.inputs : {};
+                const simInputRaw = simInputs[param];
+                const simInputVal = (simInputRaw && typeof simInputRaw === 'object' && simInputRaw.value !== undefined)
+                    ? simInputRaw.value
+                    : simInputRaw;
+                const cal = safeNum(
+                    (row.calibration_result || {})[param] ??
+                    (row.surrogate_result || {})[param] ??
+                    simInputVal
+                );
+                if (ref === null && cal === null) return;
+                labels.push(label);
+                refVals.push(ref);
+                calVals.push(cal);
+                if (ref !== null && cal !== null) {
+                    const ae = Math.abs(ref - cal);
+                    absErr.push(ae);
+                    if (ref !== 0) relErr.push((ae / Math.abs(ref)) * 100.0);
+                }
+                return;
+            }
+
+            const m = (row.metrics || {})[param];
+            if (!m) return;
+            labels.push(label);
+            refVals.push(safeNum(m.true_value));
+            calVals.push(safeNum(m.simulation_value));
+            if (safeNum(m.sim_absolute_error) !== null) absErr.push(safeNum(m.sim_absolute_error));
+            if (safeNum(m.sim_relative_error) !== null) relErr.push(safeNum(m.sim_relative_error));
+        });
+
+        return { labels, refVals, calVals, absErr, relErr };
+    }
+
+    function updateModalParameterOptions() {
+        chartParameters = getParametersForMode(modalChartMode);
+        modalParamSelect.innerHTML = chartParameters.map(p => `<option value="${p}">${p}</option>`).join('');
+    }
+
+    document.getElementById('deleteBtn').addEventListener('click', () => deleteModal.show());
+    document.getElementById('confirmDeleteBtn').addEventListener('click', () => {
+        fetch(`/simulations/api/result/${calibrationId}`, { method: 'DELETE' })
+            .then(r => { if (!r.ok) throw new Error('Failed to delete result'); return r.json(); })
+            .then(() => window.location.href = '{{ url_for("calibration.index") }}')
+            .catch(e => alert(e.message));
+    });
+
+    document.getElementById('parameterSelectBtn').addEventListener('click', () => {
+        populateColumnSelector();
+        parameterSelectModal.show();
+    });
+    document.getElementById('applyParamSelectBtn').addEventListener('click', () => {
+        selectedColumns = Array.from(document.querySelectorAll('.column-checkbox:checked')).map(c => c.value);
+        if (!selectedColumns.length) {
+            alert('Select at least one column.');
+            return;
+        }
+        currentPage = 1;
+        renderTable();
+        parameterSelectModal.hide();
+    });
+    document.getElementById('paramSearchInput').addEventListener('input', function() {
+        const term = this.value.toLowerCase();
+        document.querySelectorAll('.param-item').forEach(item => {
+            const txt = item.querySelector('label').textContent.toLowerCase();
+            item.style.display = txt.includes(term) ? '' : 'none';
+        });
+    });
+    document.getElementById('clearSearchBtn').addEventListener('click', function() {
+        document.getElementById('paramSearchInput').value = '';
+        document.querySelectorAll('.param-item').forEach(item => item.style.display = '');
+    });
+
+    const visualizationModalEl = document.getElementById('visualizationModal');
+    const modalParamSelect = document.getElementById('modalChartParameterSelect');
+    const modalMetrics = document.getElementById('modalChartMetrics');
+    const modalCtx = document.getElementById('modalParameterChart').getContext('2d');
+
+    function renderModalChart(param) {
+        const s = buildSeries(modalChartMode, param);
+        if (modalParamChart) modalParamChart.destroy();
+        const hasReference = s.refVals.some(v => v !== null);
+        modalParamChart = new Chart(modalCtx, {
+            type: 'line',
+            data: {
+                labels: s.labels,
+                datasets: [
+                    ...(hasReference ? [{ label: (modalChartMode === 'calibration_params' ? 'Original Input (Reference)' : 'True'), data: s.refVals, borderColor: 'rgb(54, 162, 235)', tension: 0.12 }] : []),
+                    { label: 'Calibrated (Simulation)', data: s.calVals, borderColor: 'rgb(255, 99, 132)', tension: 0.12 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top' },
+                    title: { display: true, text: `${modalChartMode === 'calibration_params' ? 'Calibration Parameter' : 'Target Output'}: ${param}` }
+                }
+            }
+        });
+
+        const meanAbs = s.absErr.length ? (s.absErr.reduce((a, b) => a + b, 0) / s.absErr.length) : null;
+        const meanRel = s.relErr.length ? (s.relErr.reduce((a, b) => a + b, 0) / s.relErr.length) : null;
+        modalMetrics.innerHTML = `<strong>Rows:</strong> ${s.labels.length} | <strong>Mean Abs Error:</strong> ${meanAbs !== null ? meanAbs.toFixed(6) : 'N/A'} | <strong>Mean Rel Error (%):</strong> ${meanRel !== null ? meanRel.toFixed(4) : 'N/A'}${hasReference ? '' : ' | <strong>Reference:</strong> missing for selected parameter'}`;
+    }
+
+    visualizationModalEl.addEventListener('shown.bs.modal', function() {
+        updateModalParameterOptions();
+        if (!chartParameters.length) return;
+        modalParamSelect.value = chartParameters[0];
+        renderModalChart(chartParameters[0]);
+    });
+
+    document.getElementById('modalChartModeSelect').addEventListener('change', function() {
+        modalChartMode = this.value;
+        updateModalParameterOptions();
+        if (chartParameters.length) {
+            modalParamSelect.value = chartParameters[0];
+            renderModalChart(chartParameters[0]);
+        } else if (modalParamChart) {
+            modalParamChart.destroy();
+            modalParamChart = null;
+            modalMetrics.textContent = 'No parameters available for selected series type.';
+        }
+    });
+
+    modalParamSelect.addEventListener('change', function() {
+        renderModalChart(this.value);
+    });
+
+    visualizationModalEl.addEventListener('hidden.bs.modal', function() {
+        if (modalParamChart) {
+            modalParamChart.destroy();
+            modalParamChart = null;
+        }
+    });
+
+    initTableData();
+    renderTable();
+    updateModalParameterOptions();
+});
+</script>
+{% endblock %}

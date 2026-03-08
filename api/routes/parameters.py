@@ -121,6 +121,19 @@ def save_parameters(case_id):
                 
                 if 'uom' in param and param['uom']:
                     driver_format_parameters[param_type]["EnergyStream"][name]["UOM"] = param['uom']
+
+        # Persist flattened input/output name lists so other workflows
+        # can reuse the case's simulation model config directly.
+        driver_format_parameters["x_cols"] = list(dict.fromkeys(
+            list(driver_format_parameters["InputParams"]["Spreadsheet"].keys()) +
+            list(driver_format_parameters["InputParams"]["MaterialStream"].keys()) +
+            list(driver_format_parameters["InputParams"]["EnergyStream"].keys())
+        ))
+        driver_format_parameters["y_cols"] = list(dict.fromkeys(
+            list(driver_format_parameters["OutputParameters"]["Spreadsheet"].keys()) +
+            list(driver_format_parameters["OutputParameters"]["MaterialStream"].keys()) +
+            list(driver_format_parameters["OutputParameters"]["EnergyStream"].keys())
+        ))
         
         # Update case parameters
         case.parameters = driver_format_parameters

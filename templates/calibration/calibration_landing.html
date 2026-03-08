@@ -12,7 +12,7 @@
         <a href="{{ url_for('calibration.batch_calibration') }}" class="btn btn-primary me-2">
             <i class="bi bi-collection me-2"></i>Batch Calibration
         </a>
-        <a href="#" class="btn btn-outline-info" onclick="alert('Coming soon!')">
+        <a href="{{ url_for('calibration.online_calibration') }}" class="btn btn-outline-info">
             <i class="bi bi-arrow-repeat me-2"></i>Online Learning
         </a>
     </div>
@@ -47,7 +47,10 @@
                             </a>
                         </td>
                         <td>
-                            {% if calibration.simulation_type.startswith('Batch Calibration') %}
+                            {% if calibration.simulation_type.startswith('Online Calibration') %}
+                                {% set method = calibration.simulation_type.replace('Online Calibration (', '').replace(')', '') %}
+                                <span class="badge bg-primary">Online {{ method }}</span>
+                            {% elif calibration.simulation_type.startswith('Batch Calibration') %}
                                 {% set method = calibration.simulation_type.replace('Batch Calibration (', '').replace(')', '') %}
                                 <span class="badge bg-warning">Batch {{ method }}</span>
                             {% else %}
@@ -65,7 +68,11 @@
                         </td>
                         <td>
                             <div class="btn-group btn-group-sm">
-                                {% if calibration.simulation_type.startswith('Batch Calibration') %}
+                                {% if calibration.simulation_type.startswith('Online Calibration') %}
+                                <a href="{{ url_for('calibration.online_calibration_details', result_id=calibration.id) }}" class="btn btn-outline-primary" title="View Online Calibration Details">
+                                    <i class="bi bi-arrow-repeat"></i> Details
+                                </a>
+                                {% elif calibration.simulation_type.startswith('Batch Calibration') %}
                                 <a href="{{ url_for('calibration.batch_calibration_details', result_id=calibration.id) }}" class="btn btn-outline-primary" title="View Batch Details">
                                     <i class="bi bi-collection"></i> Details
                                 </a>

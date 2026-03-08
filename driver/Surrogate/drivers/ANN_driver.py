@@ -38,8 +38,10 @@ class ANNSurrogateDriver(SurrogateInterface):
             
         # Store model versions
         self.model_versions = {}
+        self.current_version = None
         if model is not None:
             self.model_versions['base'] = model
+            self.current_version = 'base'
 
     @classmethod
     def load_from_path(cls, model_path, x_cols, y_cols, **kwargs):
@@ -124,6 +126,7 @@ class ANNSurrogateDriver(SurrogateInterface):
             # Load model
             self.model = joblib.load(model_file)
             self.model_versions['base'] = self.model
+            self.current_version = 'base'
             
             # Load scaler
             self.scaler = DataScaler()
@@ -325,6 +328,7 @@ class ANNSurrogateDriver(SurrogateInterface):
         # Update class attributes
         self.model = mlp
         self.model_versions['base'] = mlp
+        self.current_version = 'base'
         
         print(f"Model trained and saved to {model_dir}")
         return mlp, metrics, model_folder
@@ -462,11 +466,23 @@ class ANNSurrogateDriver(SurrogateInterface):
             version_name: Name for the model version
         """
         self.model_versions[version_name] = model
+
+    def set_current_version(self, version_name):
+        """
+        Switch active model version used by predict().
+
+        Args:
+            version_name (str): Existing version key in model_versions.
+        """
+        if version_name not in self.model_versions:
+            raise ValueError(f"Model version '{version_name}' not found.")
+        self.model = self.model_versions[version_name]
+        self.current_version = version_name
         
     def reset_to_base(self):
         """Reset surrogate model to base version"""
         if 'base' in self.model_versions:
-            self.model = self.model_versions['base']
+            self.set_current_version('base')
         else:
             print("Warning: No base model found")
             

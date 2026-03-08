@@ -1,5 +1,6 @@
 import numpy as np
 import math
+import pandas as pd
 from sklearn.metrics import mean_absolute_error,mean_squared_error, r2_score, mean_absolute_percentage_error
 # fit scaler on your data
 #X_norm = MinMaxScaler().fit(X)
@@ -61,8 +62,15 @@ class pso:
         ypred_norm = ypred_array / np.linalg.norm(ypred_array)
         '''
         if self.yscaler:
-            ytruenorm = self.yscaler.transform(np.array(ytrue_list).reshape(1, -1))
-            yprednorm = self.yscaler.transform(np.array(y_pred_list).reshape(1, -1))
+            if hasattr(self.yscaler, 'feature_names_in_'):
+                cols = list(self.yscaler.feature_names_in_)
+                ytrue_dict = {k: self.y_true.get(k) for k in cols}
+                ypred_dict = {k: predicted_y_dict.get(k) for k in cols}
+                ytruenorm = self.yscaler.transform(pd.DataFrame([ytrue_dict], columns=cols))
+                yprednorm = self.yscaler.transform(pd.DataFrame([ypred_dict], columns=cols))
+            else:
+                ytruenorm = self.yscaler.transform(np.array(ytrue_list).reshape(1, -1))
+                yprednorm = self.yscaler.transform(np.array(y_pred_list).reshape(1, -1))
 
             ytrue_list = ytruenorm[0]
             y_pred_list = yprednorm[0]
