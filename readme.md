@@ -70,7 +70,7 @@ The platform can be extended with:
 
 1. Clone the repository:
 ```bash
-git clone [https://github.com/bpalotai/Hysys-Simulation.git](https://github.com/bpalotai/Flowsheet-toolbox.git)
+git clone https://github.com/bpalotai/Flowsheet-toolbox.git
 ```
 
 2. Install dependencies:
